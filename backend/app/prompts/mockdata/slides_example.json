@@ -1,0 +1,267 @@
+[
+  {
+    "type": "cover",
+    "data": {
+      "title": "构思比较的'直接'法则",
+      "text": "《七年级上·第一章 有理数 · 技术思维模块》"
+    }
+  },
+  {
+    "type": "contents",
+    "data": {
+      "items": [
+        "情境引入：心算挑战",
+        "探究建构：分类与比较",
+        "技术方案：直接法则",
+        "测评验证：基础与应用",
+        "思考表达：创新与应用"
+      ]
+    }
+  },
+  {
+    "type": "transition",
+    "data": {
+      "title": "情境引入：心算挑战",
+      "text": "通过生活情境引入有理数比较的挑战，激发学习兴趣"
+    }
+  },
+  {
+    "type": "content",
+    "data": {
+      "title": "脑力大比拼",
+      "semanticFeatures": {
+        "logicType": "sequential",
+        "contentType": "lesson_introduction"
+      },
+      "items": [
+        {
+          "title": "",
+          "text": "报出一组数，-5℃和-12℃，或银行账户 +800元 和 -200元。 不画数轴，只用心算，你能立刻判定哪个更大吗？",
+          "metadata": {}
+        },
+        {
+          "title": "",
+          "text": "想想看，你有什么办法？让我们一起来确定比较有理数大小的法则吧。",
+          "metadata": {}
+        }
+      ]
+    }
+  },
+  {
+    "type": "transition",
+    "data": {
+      "title": "探究建构：分类与比较",
+      "text": "通过分类讨论和数轴观察，构建有理数比较的基本框架"
+    }
+  },
+  {
+    "type": "content",
+    "data": {
+      "title": "分类是第一步",
+      "semanticFeatures": {
+        "logicType": "classification",
+        "contentType": "concept_explanation"
+      },
+      "items": [
+        {
+          "title": "",
+          "text": "任意两个有理数，比较他们大小时，究竟分几种常见类型？",
+          "metadata": {}
+        },
+        {
+          "title": "数轴上有哪些数？",
+          "text": "正数、0、负数",
+          "metadata": {
+            "category": "number_types"
+          }
+        },
+        {
+          "title": "正数、负数、0都在什么位置？你能得到什么结论？",
+          "text": "正数 > 0 > 负数。",
+          "metadata": {
+            "category": "position_relationship"
+          }
+        },
+        {
+          "title": "比较类型分类",
+          "text": "正数 vs 正数 \n 正数 vs 负数 \n 负数 vs 负数",
+          "metadata": {
+            "category": "comparison_types"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "type": "content",
+    "data": {
+      "title": "探究建构",
+      "semanticFeatures": {
+        "logicType": "sequential",
+        "contentType": "inquiry_practice"
+      },
+      "items": [
+        {
+          "title": "",
+          "text": "两个负数（-3和-8），应该怎么比较谁大谁小？",
+          "metadata": {}
+        },
+        {
+          "title": "在数轴上找到-3 和 -8",
+          "text": "",
+          "metadata": {
+            "step": 1
+          }
+        },
+        {
+          "title": "观察它们在数轴上的位置",
+          "text": " -8 比 -3 更靠左 \n|-8| > |-3| \n所以，-8 < -3",
+          "metadata": {
+            "step": 2
+          }
+        },
+        {
+          "title": "你观察到了什么规律",
+          "text": "两个负数比较大小，绝对值大的反而小",
+          "metadata": {
+            "step": 3
+          }
+        }
+      ]
+    }
+  },
+  {
+    "type": "transition",
+    "data": {
+      "title": "技术方案：直接法则",
+      "text": "总结有理数比较的直接法则，建立标准操作流程"
+    }
+  },
+  {
+    "type": "content",
+    "data": {
+      "title": "技术方案",
+      "semanticFeatures": {
+        "logicType": "hierarchical",
+        "contentType": "comparison_analysis"
+      },
+      "items": [
+        {
+          "title": "",
+          "text": "下面让我们一起来总结有理数比较大小的直接法则",
+          "metadata": {
+            "hierarchyLevel": 1
+          }
+        },
+        {
+          "title": "有理数比较大小直接法则",
+          "text": "正数 > 0 > 负数 \n两个正数，绝对值大的更大 \n两个负数，绝对值大的更小",
+          "metadata": {
+            "hierarchyLevel": 2
+          }
+        },
+        {
+          "title": "操作流程",
+          "text": "看符号 → 不同符号直接判断\n 同正 → 再比较绝对值：两个正数，绝对值大的更大 \n 同负 → 再比较绝对值：两个负数，绝对值大的更小",
+          "metadata": {
+            "hierarchyLevel": 3
+          }
+        },
+        {
+          "title": "",
+          "text": "现在，来设计一个你自己的有理数比较口诀吧",
+          "metadata": {
+            "hierarchyLevel": 4
+          }
+        }
+      ]
+    }
+  },
+  {
+    "type": "transition",
+    "data": {
+      "title": "测评验证：基础与应用",
+      "text": "通过基础练习和情境应用，验证比较法则的正确性和实用性"
+    }
+  },
+  {
+    "type": "content",
+    "data": {
+      "title": "测评验证",
+      "semanticFeatures": {
+        "logicType": "parallel",
+        "contentType": "class_exercise"
+      },
+      "items": [
+        {
+          "title": "基础验证",
+          "text": "比较下列有理数，写出判断过程：\n①. 5和-3\n②. 2和7\n③. -4和-6",
+          "metadata": {
+            "category": "basic_exercise"
+          }
+        },
+        {
+          "title": "情景应用",
+          "text": "气象台数据显示：甲地气温-5℃，乙地气温-8℃，哪地更暖？",
+          "metadata": {
+            "category": "application"
+          }
+        },
+        {
+          "title": "错误辨析",
+          "text": "小明说：\"-9比-5大，因为9比5大\"，你觉得对吗？为什么？",
+          "metadata": {
+            "category": "error_analysis"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "type": "transition",
+    "data": {
+      "title": "思考表达：创新与应用",
+      "text": "通过创新思考和实际应用，深化对比较法则的理解和运用"
+    }
+  },
+  {
+    "type": "content",
+    "data": {
+      "title": "思考表达",
+      "semanticFeatures": {
+        "logicType": "problem_solution",
+        "contentType": "problem_discussion"
+      },
+      "items": [
+        {
+          "title": "",
+          "text": "你能想出更快的\"心算口诀\"或判断方法吗？比如，对于两个负数，是不是可以想象它们\"欠钱\"的多少，欠的多，数值就\"小\"？请你创造一个属于自己的、更容易记忆的比喻。",
+          "metadata": {
+            "phase": "creative_thinking"
+          }
+        },
+        {
+          "title": "",
+          "text": "除了天气预报和银行账户，你还能再哪些生活场景中应用今天设计的这套\"比大小\"技术？请选择一个场景，自己编一道应用题。",
+          "metadata": {
+            "phase": "application"
+          }
+        },
+        {
+          "title": "",
+          "text": "今天，你最大的发现是什么？是分类讨论的思想？还是利用绝对值这个工具巧妙解决问题的思路？",
+          "metadata": {
+            "phase": "reflection"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "type": "end",
+    "data": {
+      "title": "总结",
+      "text": "通过本节课的学习，我们掌握了有理数比较的直接法则，并通过分类讨论和数轴观察，构建了有理数比较的基本框架。希望同学们能够通过本节课的学习，掌握有理数比较的直接法则，并通过分类讨论和数轴观察，构建了有理数比较的基本框架。"
+    }
+  }
+]

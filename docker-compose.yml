@@ -1,0 +1,96 @@
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: ai-pptist-postgres
+    env_file:
+      - ./config/.env
+    volumes:
+      - ./workspace/db_data:/var/lib/postgresql/data
+      - ./docker/database/init-scripts:/docker-entrypoint-initdb.d
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    networks:
+      - ai-pptist-network
+    restart: unless-stopped
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: ai-pptist-redis
+    env_file:
+      - ./config/.env
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ./workspace/redis_data:/data
+    networks:
+      - ai-pptist-network
+    restart: unless-stopped
+
+  # FastAPI 后端
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-pptist-backend
+    env_file:
+      - ./config/.env
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+      - ./config:/app/config
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - ai-pptist-network
+    restart: unless-stopped
+
+  # Vue.js 前端
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend/Dockerfile
+    container_name: ai-pptist-frontend
+    env_file:
+      - ./config/.env
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_BASE_URL=http://backend:8000/api/v1
+    depends_on:
+      - backend
+    networks:
+      - ai-pptist-network
+    restart: unless-stopped
+
+  # MLflow Tracking Server
+  mlflow:
+    build:
+      context: ./docker/mlflow
+      dockerfile: Dockerfile
+    container_name: ai-pptist-mlflow
+    env_file:
+      - ./config/.env
+    ports:
+      - "${MLFLOW_PORT:-5001}:5001"
+    volumes:
+      - ./workspace/mlflow_data:/mlflow
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - ai-pptist-network
+    restart: unless-stopped
+
+networks:
+  ai-pptist-network:
+    driver: bridge

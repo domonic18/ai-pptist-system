@@ -1,0 +1,59 @@
+services:
+  # 开发环境数据库
+  postgres-dev:
+    image: postgres:15-alpine
+    container_name: ai-pptist-postgres-dev
+    env_file:
+      - ./config/.env.local
+    volumes:
+      - ./workspace/db_data:/var/lib/postgresql/data
+      - ./docker/database/init-scripts:/docker-entrypoint-initdb.d
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    networks:
+      - ai-pptist-dev-network
+    restart: unless-stopped
+
+  # 开发环境Redis
+  redis-dev:
+    image: redis:7-alpine
+    container_name: ai-pptist-redis-dev
+    env_file:
+      - ./config/.env.local
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ./workspace/redis_data:/data
+    networks:
+      - ai-pptist-dev-network
+    restart: unless-stopped
+
+  # MLflow Tracking Server
+  mlflow-dev:
+    build:
+      context: ./docker/mlflow
+      dockerfile: Dockerfile
+    container_name: ai-pptist-mlflow-dev
+    env_file:
+      - ./config/.env.local
+    ports:
+      - "${MLFLOW_PORT:-5001}:5001"
+    volumes:
+      - mlflow_data:/var/lib/mlflow/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - ai-pptist-dev-network
+    restart: unless-stopped
+
+volumes:
+  mlflow_data:
+    driver: local
+
+networks:
+  ai-pptist-dev-network:
+    driver: bridge

@@ -1,0 +1,137 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-pptist-backend"
+version = "1.0.0"
+description = "AI PPTist Backend API"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "AI PPTist Team", email = "team@ai-pptist.com"}
+]
+keywords = ["ai", "presentation", "fastapi", "openai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+# 生产环境依赖
+dependencies = [
+    # Web框架和服务器
+    "fastapi==0.104.1",
+    "uvicorn[standard]==0.24.0",
+    "python-multipart==0.0.6",
+
+    # 数据库和ORM
+    "sqlalchemy==2.0.23",
+    "asyncpg==0.29.0",
+    "greenlet>=2.0.2",
+
+    # 数据验证和配置
+    "pydantic==2.5.0",
+    "pydantic-settings==2.1.0",
+    "python-dotenv==1.0.0",
+
+    # AI和机器学习
+    "openai>=1.17,<2.0.0",
+    "mlflow==3.1.4",
+    "tenacity>=8.2.3",
+    "tiktoken>=0.5.2",
+
+    # 图片生成SDK
+    "dashscope>=1.17.0",  # 通义千问文生图SDK
+    "volcenginesdkarkruntime>=1.0.0",  # 火山引擎方舟文生图SDK
+
+    # 文件存储和云服务
+    "cos-python-sdk-v5==1.9.27",
+    "requests==2.31.0",
+
+    # 工具和辅助库
+    "markdown==3.8",
+    "aiohttp>=3.8.0",
+    "jieba>=0.42.1",
+]
+
+# 可选依赖组
+[project.optional-dependencies]
+# 开发环境依赖
+dev = [
+    # 测试框架
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.25.0",
+    "pytest-cov>=4.1.0",
+
+    # 代码质量工具
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+
+    # Git hooks
+    "pre-commit>=3.4.0",
+
+    # 调试工具
+    "ipdb>=0.13.13",
+    "ipython>=8.15.0",
+
+    # 文档工具
+    "sphinx>=7.2.0",
+    "sphinx-rtd-theme>=2.0.0",
+]
+
+# 图片生成扩展依赖
+image-generation = [
+    # 图片生成相关SDK（可选，用于支持更多图片生成提供商）
+    "dashscope>=1.17.0",  # 通义千问文生图SDK
+    "volcenginesdkarkruntime>=1.0.0",  # 火山引擎方舟文生图SDK
+]
+
+# Docker构建依赖
+docker = [
+    # Docker特定依赖（如果有）
+]
+
+# 入口点配置
+[project.scripts]
+ai-pptist-api = "app.main:main"
+
+# 包发现配置
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+# 工具配置
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pylint.master]
+extension-pkg-whitelist = ["pydantic"]
+
+[tool.pylint.messages-control]
+disable = [
+    "E0401",  # import-error
+    "F0401",  # import-error (from ... import)
+    "C0411",  # wrong-import-order
+    "C0412",  # wrong-import-order
+]
