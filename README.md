@@ -1,19 +1,3 @@
-<p align="center">
-    <img src='/public/logo.png' />
-</p>
-
-<p align="center">
-    <a href="https://www.github.com/pipipi-pikachu/PPTist/stargazers" target="_black"><img src="https://img.shields.io/github/stars/pipipi-pikachu/PPTist?logo=github" alt="stars" /></a>
-    <a href="https://www.github.com/pipipi-pikachu/PPTist/network/members" target="_black"><img src="https://img.shields.io/github/forks/pipipi-pikachu/PPTist?logo=github" alt="forks" /></a>
-    <a href="https://www.github.com/pipipi-pikachu/PPTist/blob/master/LICENSE" target="_black"><img src="https://img.shields.io/github/license/pipipi-pikachu/PPTist?color=%232DCE89&logo=github" alt="license" /></a>
-    <a href="https://www.typescriptlang.org" target="_black"><img src="https://img.shields.io/badge/language-TypeScript-blue.svg" alt="language"></a>
-    <a href="https://github.com/pipipi-pikachu/PPTist/issues" target="_black"><img src="https://img.shields.io/github/issues-closed/pipipi-pikachu/PPTist.svg" alt="issue"></a>
-    <a href="https://gitee.com/pptist/PPTist" target="_black"><img src="https://gitee.com/pptist/PPTist/badge/star.svg?version=latest" alt="gitee"></a>
-</p>
-
-简体中文 | [English](README.md)
-
-
 # 🎨 AI PPTist
 > PowerPoint-ist（/'pauəpɔintist/），一个基于 Web 的在线演示文稿（幻灯片）应用，还原了大部分 Office PowerPoint 常用功能，支持 文字、图片、形状、线条、图表、表格、视频、音频、公式 几种最常用的元素类型，可以在 Web 浏览器中编辑/演示幻灯片。
 
@@ -28,15 +12,8 @@
 
 ## 首次克隆项目
 
-由于本项目使用 git submodule 管理前端代码，首次克隆时需要特别注意：
+首次克隆时需要特别注意：
 
-### 方法一：克隆时自动初始化子模块（推荐）
-```bash
-git clone --recurse-submodules https://github.com/domonic18/ai-pptist-system.git
-cd ai-pptist-system
-```
-
-### 方法二：先克隆主仓库，再初始化子模块
 ```bash
 # 克隆主仓库
 git clone https://github.com/domonic18/ai-pptist-system.git
@@ -58,29 +35,6 @@ git pull origin master
 # 更新所有子模块到最新提交
 git submodule update --remote
 
-# 或者进入子模块目录单独更新
-cd frontend
-git pull origin ai-pptist-frontend
-```
-
-## 子模块管理
-
-### 查看子模块状态
-```bash
-git submodule status
-```
-
-### 切换子模块分支
-```bash
-cd frontend
-git checkout ai-pptist-frontend
-```
-
-### 提交子模块更新
-当子模块有更新时，需要在主仓库中提交子模块的引用：
-```bash
-git add frontend
-git commit -m "Update frontend submodule to latest version"
 ```
 
 # 🚀 快速部署运行
@@ -117,25 +71,8 @@ API文档访问：http://127.0.0.1:8000/docs
 
 # 停止开发环境
 ./scripts/deploy.sh dev down
-
-# 重启开发环境
-./scripts/deploy.sh dev restart
-
-# 查看开发环境日志
-./scripts/deploy.sh dev logs
-
-# 查看服务状态
-./scripts/deploy.sh dev status
-
-# 构建镜像
-./scripts/deploy.sh dev build
-
-# 清理开发环境数据
-./scripts/deploy.sh dev clean
-
-# 查看脚本帮助
-./scripts/deploy.sh help
 ```
+> 更多deploy.sh的命令介绍，请参考[部署脚本说明](scripts/README.md)
 
 ## 配置文件说明
 
@@ -214,7 +151,7 @@ pip install -e .[dev]
 ## 开发文档
 - [系统架构设计](docs/arch/系统架构设计.md)
 - [AI PPT功能说明](docs/archive/AIPPT.md)
-- [开发规范](docs/standard/README.md)
+- [开发规范](docs/standard/README.md) - 包含API设计、响应格式、日志记录、测试规范等完整规范体系
 
 
 # 📄 版权声明/开源协议
