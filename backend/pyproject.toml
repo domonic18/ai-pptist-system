@@ -49,7 +49,6 @@ dependencies = [
 
     # 图片生成SDK
     "dashscope>=1.17.0",  # 通义千问文生图SDK
-    "volcenginesdkarkruntime>=1.0.0",  # 火山引擎方舟文生图SDK
 
     # 文件存储和云服务
     "cos-python-sdk-v5==1.9.27",
@@ -59,6 +58,7 @@ dependencies = [
     "markdown==3.8",
     "aiohttp>=3.8.0",
     "jieba>=0.42.1",
+    "beautifulsoup4>=4.12.0",  # HTML解析
 ]
 
 # 可选依赖组
