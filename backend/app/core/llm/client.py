@@ -71,7 +71,16 @@ class AIClient:
         """
         if self.mlflow_tracker.is_initialized:
             run_name = f"AI_Call_{model.name}"
-            with self.mlflow_tracker.start_run(run_name=run_name):
+            try:
+                with self.mlflow_tracker.start_run(run_name=run_name):
+                    return await call_func()
+            except Exception as e:
+                # 如果MLflow上下文管理器出现异常，直接调用函数而不使用MLflow
+                logger.warning(
+                    "MLflow上下文管理器异常，降级到无追踪模式",
+                    operation="mlflow_context_fallback",
+                    error=str(e)
+                )
                 return await call_func()
         else:
             return await call_func()

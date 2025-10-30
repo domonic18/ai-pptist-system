@@ -82,17 +82,20 @@ class MLflowTracker:
                 yield None
                 return
 
+        run = None
         try:
             run = mlflow.start_run(run_name=run_name, tags=tags)
             yield run
         except Exception as e:
             logger.error(f"启动MLflow运行失败: {e}")
+            # 在异常情况下仍然yield None，让调用方处理
             yield None
         finally:
-            try:
-                mlflow.end_run()
-            except Exception:
-                pass
+            if run is not None:
+                try:
+                    mlflow.end_run()
+                except Exception as e:
+                    logger.warning(f"结束MLflow运行时出错: {e}")
 
 
 
