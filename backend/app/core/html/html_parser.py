@@ -3,7 +3,7 @@ HTML解析器模块
 负责解析LLM返回的HTML，转换回PPTist元素格式
 """
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 import re
 from bs4 import BeautifulSoup
 
@@ -273,24 +273,55 @@ class HTMLParser:
     def _parse_rotate_value(self, transform: str) -> float:
         """
         从transform中解析旋转角度
-        
+
         Args:
             transform: 如 "rotate(15deg)"
-            
+
         Returns:
             float: 角度值
         """
         if not transform:
             return 0.0
-        
+
         match = re.search(r'rotate\s*\(\s*([-\d.]+)deg\s*\)', transform)
         if match:
             try:
                 return float(match.group(1))
             except (ValueError, TypeError):
                 pass
-        
+
         return 0.0
+
+    def _parse_radius_value(self, radius_str: str) -> Optional[float]:
+        """
+        解析border-radius值
+
+        Args:
+            radius_str: CSS border-radius值，如 "10px" 或 "10px 20px"
+
+        Returns:
+            Optional[float]: 圆角半径值，如果无法解析则返回None
+        """
+        if not radius_str:
+            return None
+
+        radius_str = str(radius_str).strip().lower()
+
+        # 处理多个值的情况（如 "10px 20px"），取第一个值
+        parts = radius_str.split()
+        if parts:
+            first_value = parts[0]
+
+            # 移除px后缀
+            if first_value.endswith('px'):
+                first_value = first_value[:-2]
+
+            try:
+                return float(first_value)
+            except (ValueError, TypeError):
+                pass
+
+        return None
     
     def _parse_text_element(
         self,
@@ -445,10 +476,12 @@ class HTMLParser:
             # 图片源
             src=src,
             fixedRatio=original.fixedRatio,
+            # 圆角半径
+            radius=self._parse_radius_value(style_dict.get('border-radius', '')),
         )
-        
-        # 注意：border-radius等样式属性在PPTist元素中可能不支持
-        # 这些样式由LLM优化，但在转换回PPTist元素时会被忽略
-        
+
+        # 注意：border-radius样式属性现在已支持，会设置到radius字段
+        # 其他不支持的样式属性由LLM优化，但在转换回PPTist元素时会被忽略
+
         return optimized
 

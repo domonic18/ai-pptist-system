@@ -407,3 +407,65 @@ class TestHTMLParser:
         assert text_elem.height == 44.0
         assert text_elem.content == "正数、0、负数"
 
+    def test_parse_radius_value(self):
+        """测试解析border-radius值"""
+        parser = HTMLParser()
+
+        # 测试基本px值
+        assert parser._parse_radius_value("10px") == 10.0
+        assert parser._parse_radius_value("25.5px") == 25.5
+
+        # 测试无px后缀
+        assert parser._parse_radius_value("15") == 15.0
+
+        # 测试多个值（取第一个）
+        assert parser._parse_radius_value("10px 20px") == 10.0
+        assert parser._parse_radius_value("5px 10px 15px 20px") == 5.0
+
+        # 测试无效值
+        assert parser._parse_radius_value("") is None
+        assert parser._parse_radius_value("invalid") is None
+        assert parser._parse_radius_value("auto") is None
+
+    def test_parse_image_with_radius(self):
+        """测试解析带有border-radius的图片元素"""
+        original_elements = [
+            ElementData(
+                id="radius-image",
+                type="image",
+                left=100.0,
+                top=100.0,
+                width=200.0,
+                height=150.0,
+                rotate=0.0,
+                src="https://example.com/image.jpg",
+                fixedRatio=True
+            )
+        ]
+
+        # LLM返回的HTML使用了border-radius
+        html_content = '''<div class="ppt-canvas">
+  <div class="ppt-element ppt-image" data-id="radius-image" data-type="image"
+       style="position: absolute; left: 100px; top: 100px; width: 200px; height: 150px; border-radius: 15px;">
+    <img src="https://example.com/image.jpg" />
+  </div>
+</div>'''
+
+        optimized_elements = self.parser.parse_html_to_elements(
+            html_content,
+            original_elements
+        )
+
+        assert len(optimized_elements) == 1
+        elem = optimized_elements[0]
+        assert elem.id == "radius-image"
+        assert elem.type == "image"
+        # 验证radius字段被正确解析
+        assert elem.radius == 15.0
+        # 验证其他属性保持不变
+        assert elem.left == 100.0
+        assert elem.top == 100.0
+        assert elem.width == 200.0
+        assert elem.height == 150.0
+        assert elem.src == "https://example.com/image.jpg"
+

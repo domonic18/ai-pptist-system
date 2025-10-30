@@ -43,6 +43,7 @@ class ElementData(BaseModel):
     text: Optional[Dict[str, Any]] = None
     src: Optional[str] = None
     fixedRatio: Optional[bool] = None
+    radius: Optional[float] = Field(default=None, ge=0, description="圆角半径")
 
 
 class LayoutOptimizationRequest(BaseModel):
