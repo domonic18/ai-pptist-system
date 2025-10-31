@@ -33,7 +33,8 @@ class LayoutOptimizationHandler:
         data = {
             "elements": [el.model_dump() for el in request.elements],
             "canvas_size": request.canvas_size.model_dump(),
-            "options": request.options.model_dump() if request.options else {}
+            "options": request.options.model_dump() if request.options else {},
+            "user_prompt": request.user_prompt or ""
         }
 
         content_hash = hashlib.sha256(
@@ -83,7 +84,8 @@ class LayoutOptimizationHandler:
                 slide_id=request.slide_id,
                 elements=request.elements,
                 canvas_size=request.canvas_size,
-                options=request.options
+                options=request.options,
+                user_prompt=request.user_prompt
             )
 
             # 构建响应数据

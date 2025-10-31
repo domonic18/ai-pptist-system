@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS images (
     height INTEGER,
     source_type VARCHAR(50) NOT NULL DEFAULT 'uploaded',
     storage_status VARCHAR(20) NOT NULL DEFAULT 'active',
-    model_name VARCHAR(100),  -- 添加model_name字段
+    generation_model VARCHAR(100),  -- 添加generation_model字段
     image_url TEXT,
     cos_key VARCHAR(500),
     cos_bucket VARCHAR(100),
@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS ai_models (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     provider VARCHAR(100) NOT NULL,
-    model_name VARCHAR(255) NOT NULL,
+    ai_model_name VARCHAR(255) NOT NULL,
 
     -- API配置
     base_url VARCHAR(512),

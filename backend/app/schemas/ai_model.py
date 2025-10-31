@@ -11,7 +11,7 @@ class AIModelBase(BaseModel):
     """AI模型基础模型"""
     name: str = Field(..., min_length=1, max_length=255, description="模型显示名称")
     provider: str = Field(..., min_length=1, max_length=100, description="服务提供商")
-    model_name: str = Field(..., min_length=1, max_length=255, description="模型名称")
+    ai_model_name: str = Field(..., min_length=1, max_length=255, description="AI模型名称")
     base_url: Optional[str] = Field(None, max_length=512, description="API基础URL")
     api_key: Optional[str] = Field(None, description="API密钥（加密存储）")
 
@@ -61,7 +61,7 @@ class AIModelUpdate(BaseModel):
     """更新AI模型请求模型"""
     name: Optional[str] = Field(None, min_length=1, max_length=255, description="模型显示名称")
     provider: Optional[str] = Field(None, min_length=1, max_length=100, description="服务提供商")
-    model_name: Optional[str] = Field(None, min_length=1, max_length=255, description="模型名称")
+    ai_model_name: Optional[str] = Field(None, min_length=1, max_length=255, description="AI模型名称")
     base_url: Optional[str] = Field(None, max_length=512, description="API基础URL")
     api_key: Optional[str] = Field(None, description="API密钥（加密存储）")
     max_tokens: Optional[str] = Field(None, description="最大token数")
@@ -132,7 +132,7 @@ class AIModelSelection(BaseModel):
     """AI模型选择模型"""
     model_id: Optional[str] = Field(None, description="指定的模型ID")
     provider: Optional[str] = Field(None, description="服务提供商过滤")
-    model_name: Optional[str] = Field(None, description="模型名称过滤")
+    ai_model_name: Optional[str] = Field(None, description="AI模型名称过滤")
 
     model_config = {
         "protected_namespaces": ()

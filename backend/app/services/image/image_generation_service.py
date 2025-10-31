@@ -24,7 +24,7 @@ class ImageGenerationService:
     async def generate_image(
         self,
         prompt: str,
-        model_name: str = "dall-e-3",
+        generation_model: str = "dall-e-3",
         width: int = 1024,
         height: int = 1024,
         quality: str = "standard",
@@ -35,7 +35,7 @@ class ImageGenerationService:
 
         Args:
             prompt: 图片描述
-            model_name: 模型名称
+            generation_model: 生成模型名称
             width: 图片宽度
             height: 图片高度
             quality: 图片质量
@@ -47,13 +47,13 @@ class ImageGenerationService:
         try:
             logger.info("开始图片生成服务", extra={
                 "prompt": prompt[:100] + "..." if len(prompt) > 100 else prompt,
-                "model_name": model_name,
+                "generation_model": generation_model,
                 "width": width,
                 "height": height
             })
 
             # 获取模型配置
-            model_config = await self.ai_model_service.get_model_config_for_image_generation(model_name)
+            model_config = await self.ai_model_service.get_model_config_for_image_generation(generation_model)
             if not model_config:
                 return self._create_error_result("模型不存在")
 

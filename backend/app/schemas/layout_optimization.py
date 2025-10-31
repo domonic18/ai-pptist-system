@@ -60,6 +60,10 @@ class LayoutOptimizationRequest(BaseModel):
         default=None,
         description="优化选项"
     )
+    user_prompt: Optional[str] = Field(
+        default=None,
+        description="用户自定义提示词"
+    )
 
 
 class LayoutOptimizationResponseData(BaseModel):

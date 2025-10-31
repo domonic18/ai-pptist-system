@@ -46,7 +46,7 @@ class ManagementService:
                 "id": model.id,
                 "name": model.name,
                 "provider": model.provider,
-                "model_name": model.model_name,
+                "ai_model_name": model.ai_model_name,
                 "base_url": model.base_url,
                 "api_key": model.api_key,
                 "max_tokens": model.max_tokens,
@@ -114,7 +114,7 @@ class ManagementService:
             new_model = await self.repository.create_model(
                 name=model_data["name"],
                 provider=model_data["provider"],
-                model_name=model_data["model_name"],
+                ai_model_name=model_data["ai_model_name"],
                 base_url=model_data["base_url"],
                 api_key=model_data.get("api_key", ""),
                 max_tokens=model_data.get("max_tokens", "8192"),
@@ -161,8 +161,8 @@ class ManagementService:
                 update_fields["name"] = update_data["name"]
             if "provider" in update_data:
                 update_fields["provider"] = update_data["provider"]
-            if "model_name" in update_data:
-                update_fields["model_name"] = update_data["model_name"]
+            if "ai_model_name" in update_data:
+                update_fields["ai_model_name"] = update_data["ai_model_name"]
             if "base_url" in update_data:
                 update_fields["base_url"] = update_data["base_url"]
             if "api_key" in update_data:
@@ -256,7 +256,7 @@ class ManagementService:
             "id": model.id,
             "name": model.name,
             "provider": model.provider,
-            "model_name": model.model_name,
+            "ai_model_name": model.ai_model_name,
             "base_url": model.base_url,
             "max_tokens": model.max_tokens,
             "context_window": model.context_window,
@@ -289,7 +289,7 @@ class ManagementService:
             for model in models:
                 result.append({
                     "name": model.name,
-                    "model_name": model.model_name,
+                    "ai_model_name": model.ai_model_name,
                     "provider": model.provider,
                     "is_enabled": model.is_enabled,
                     "is_default": model.is_default,
@@ -320,7 +320,7 @@ class ManagementService:
                 all_models = await self.repository.list_models(
                     supports_image_generation=True
                 )
-                model = next((m for m in all_models if m.model_name == model_name), None)
+                model = next((m for m in all_models if m.ai_model_name == model_name), None)
 
             if not model:
                 logger.error("模型不存在", extra={
@@ -339,7 +339,7 @@ class ManagementService:
             return {
                 "id": model.id,
                 "name": model.name,
-                "model_name": model.model_name,
+                "ai_model_name": model.ai_model_name,
                 "provider": model.provider,
                 "base_url": model.base_url,
                 "api_key": model.api_key,
@@ -374,7 +374,7 @@ class ManagementService:
 
             # 创建模型配置对象
             config_obj = type('ModelConfig', (), {
-                'name': model_config["model_name"],
+                'name': model_config["ai_model_name"],
                 'provider': image_provider_name,
                 'base_url': model_config["base_url"],
                 'api_key': model_config["api_key"],

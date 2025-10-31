@@ -105,7 +105,7 @@ WHERE NOT EXISTS (
 
 -- 插入默认模型配置
 INSERT INTO ai_models (
-    id, name, provider, model_name, base_url, api_key_encrypted,
+    id, name, provider, ai_model_name, base_url, api_key_encrypted,
     is_enabled, is_default, supports_chat, supports_embeddings,
     supports_vision, supports_tools, max_tokens, context_window
 ) VALUES (

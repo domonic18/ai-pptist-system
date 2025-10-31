@@ -41,7 +41,7 @@ class ImageResponse(ImageBase):
     user_id: str
     image_url: Optional[str] = None
     source_type: str
-    model_name: Optional[str] = None
+    generation_model: Optional[str] = None
     width: Optional[int] = None
     height: Optional[int] = None
     file_size: Optional[int] = None
@@ -70,7 +70,7 @@ class ImageListResponse(BaseModel):
 class ImageGenerationAndStoreRequest(BaseModel):
     """AI生成图片并存储请求模型"""
     prompt: str
-    model_name: str = "dall-e-3"
+    generation_model: str = "dall-e-3"
     width: int = 1024
     height: int = 1024
     quality: str = "standard"

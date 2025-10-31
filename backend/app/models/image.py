@@ -32,7 +32,7 @@ class Image(Base):
 
     # 图片来源和类型
     source_type = Column(String(20), nullable=False, default='generated')  # generated, uploaded
-    model_name = Column(String(100), nullable=True)  # 对于用户上传图片，此字段可能为空
+    generation_model = Column(String(100), nullable=True)  # 对于用户上传图片，此字段可能为空
 
     # 文件信息
     width = Column(Integer, nullable=True)
@@ -57,7 +57,7 @@ class Image(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Image(id={self.id}, source_type={self.source_type}, model_name={self.model_name})>"
+        return f"<Image(id={self.id}, source_type={self.source_type}, generation_model={self.generation_model})>"
 
     @property
     def is_generated(self) -> bool:
@@ -83,7 +83,7 @@ class Image(Base):
             'image_url': self.image_url,
             'url': self.image_url,  # 添加url字段，与前端接口保持一致
             'source_type': self.source_type,
-            'model_name': self.model_name,
+            'generation_model': self.generation_model,
             'width': self.width,
             'height': self.height,
             'file_size': self.file_size,

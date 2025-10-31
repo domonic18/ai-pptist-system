@@ -21,7 +21,7 @@ class ImageSearchResult(BaseModel):
     """图片搜索结果"""
     id: str = Field(..., description="图片ID")
     prompt: str = Field(..., description="生成提示词")
-    model_name: str = Field(..., description="模型名称")
+    generation_model: str = Field(..., description="生成模型名称")
     width: Optional[int] = Field(None, description="图片宽度")
     height: Optional[int] = Field(None, description="图片高度")
     file_size: Optional[int] = Field(None, description="文件大小")

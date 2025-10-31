@@ -36,7 +36,8 @@ class LayoutOptimizationService:
         slide_id: str,
         elements: List[ElementData],
         canvas_size: CanvasSize,
-        options: Optional[OptimizationOptions] = None
+        options: Optional[OptimizationOptions] = None,
+        user_prompt: Optional[str] = None
     ) -> List[ElementData]:
         """
         优化幻灯片布局的核心方法
@@ -73,7 +74,7 @@ class LayoutOptimizationService:
             )
 
             # 2. 构建提示词参数
-            requirements = self._build_requirements(options)
+            requirements = self._build_requirements(options, user_prompt)
             user_prompt_params = {
                 "canvas_width": canvas_size.width,
                 "canvas_height": canvas_size.height,
@@ -118,7 +119,7 @@ class LayoutOptimizationService:
             )
 
             # 7. 验证结果（确保内容不变、ID一致等）
-            self._validate_optimized_elements(optimized_elements, elements)
+            self._validate_optimized_elements(optimized_elements, elements, user_prompt)
 
             logger.info(
                 "布局优化执行成功",
@@ -140,9 +141,13 @@ class LayoutOptimizationService:
             raise
 
 
-    def _build_requirements(self, options: Optional[OptimizationOptions]) -> str:
+    def _build_requirements(self, options: Optional[OptimizationOptions], user_prompt: Optional[str]) -> str:
         """构建优化要求文本"""
         requirements = []
+
+        # 添加用户自定义提示词（如果有）
+        if user_prompt and user_prompt.strip():
+            requirements.append(f"- 用户特定要求：{user_prompt.strip()}")
 
         if options:
             if options.keep_colors:
@@ -166,7 +171,8 @@ class LayoutOptimizationService:
     def _validate_optimized_elements(
         self,
         optimized: List[ElementData],
-        original: List[ElementData]
+        original: List[ElementData],
+        user_prompt: Optional[str] = None
     ):
         """验证优化结果（确保内容不变、ID一致）"""
         # 1. 元素数量应该一致（暂时注释掉严格校验）
@@ -194,14 +200,66 @@ class LayoutOptimizationService:
                 f"元素ID不匹配：缺失{missing}，多余{extra}"
             )
 
-        # 3. 验证文本内容未被修改
-        for orig_el in original:
-            if orig_el.type == "text" and orig_el.content:
-                opt_el = next((el for el in optimized if el.id == orig_el.id), None)
-                if opt_el and opt_el.content != orig_el.content:
-                    logger.warning(
-                        "文本内容被修改，已恢复原始内容",
-                        element_id=orig_el.id
-                    )
-                    # 强制恢复原始内容
-                    opt_el.content = orig_el.content
+    def _validate_text_content(
+        self,
+        optimized: List[ElementData],
+        original: List[ElementData],
+        user_prompt: Optional[str]
+    ):
+        """
+        智能验证文本内容
+
+        根据用户提示词决定是否允许修改文本内容：
+        - 如果提示词包含"文字内容不要修改"，则严格保持文本不变
+        - 如果用户明确允许修改，则允许文本优化
+        - 默认情况下保持文本内容不变
+        """
+        # 检查用户提示词中是否明确要求保持文本内容不变
+        keep_text_unchanged = False
+        if user_prompt:
+            keep_text_unchanged = any(keyword in user_prompt.lower()
+                                    for keyword in [
+                                        '文字内容不要修改',
+                                        '不要修改文字',
+                                        '保持文字不变',
+                                        '文本内容不变',
+                                        '不要改动文字'
+                                    ])
+
+        # 如果用户明确要求保持文本不变，则强制恢复原始内容
+        if keep_text_unchanged:
+            logger.info(
+                "用户要求保持文本内容不变，强制恢复原始文本",
+                operation="validate_text_content",
+                user_prompt=user_prompt
+            )
+            for orig_el in original:
+                if orig_el.type == "text" and orig_el.content:
+                    opt_el = next((el for el in optimized if el.id == orig_el.id), None)
+                    if opt_el and opt_el.content != orig_el.content:
+                        logger.warning(
+                            "文本内容被修改，已恢复原始内容",
+                            element_id=orig_el.id,
+                            original_content=orig_el.content[:50],
+                            optimized_content=opt_el.content[:50]
+                        )
+                        # 强制恢复原始内容
+                        opt_el.content = orig_el.content
+        else:
+            # 用户没有明确要求保持文本不变，允许文本优化
+            logger.info(
+                "用户允许文本内容优化，不强制恢复原始文本",
+                operation="validate_text_content",
+                user_prompt=user_prompt
+            )
+            # 记录文本变化（但不强制恢复）
+            for orig_el in original:
+                if orig_el.type == "text" and orig_el.content:
+                    opt_el = next((el for el in optimized if el.id == orig_el.id), None)
+                    if opt_el and opt_el.content != orig_el.content:
+                        logger.info(
+                            "文本内容被优化",
+                            element_id=orig_el.id,
+                            original_content=orig_el.content[:50],
+                            optimized_content=opt_el.content[:50]
+                        )

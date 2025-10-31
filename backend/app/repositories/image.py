@@ -31,7 +31,7 @@ class ImageRepository(BaseRepository):
             user_id=user_id,
             prompt=getattr(create_data, 'prompt', None),
             image_url=getattr(create_data, 'image_url', None),
-            model_name=getattr(create_data, 'model_name', 'user_upload'),
+            generation_model=getattr(create_data, 'generation_model', 'user_upload'),
             width=getattr(create_data, 'width', None),
             height=getattr(create_data, 'height', None),
             file_size=getattr(create_data, 'file_size', 0),

@@ -20,7 +20,7 @@ class AIModel(Base):
     id = Column(String(50), primary_key=True, index=True)
     name = Column(String(255), nullable=False, comment="模型显示名称")
     provider = Column(String(100), nullable=False, comment="服务提供商")
-    model_name = Column(String(255), nullable=False, comment="模型名称")
+    ai_model_name = Column(String(255), nullable=False, comment="AI模型名称")
 
     # API配置
     base_url = Column(String(512), nullable=True, comment="API基础URL")
@@ -74,6 +74,6 @@ class AIModel(Base):
         if self.provider.lower() == 'openai':
             return f"{self.base_url}/v1/chat/completions"
         elif self.provider.lower() == 'azure':
-            return f"{self.base_url}/openai/deployments/{self.model_name}/chat/completions"
+            return f"{self.base_url}/openai/deployments/{self.ai_model_name}/chat/completions"
         else:
             return f"{self.base_url}/chat/completions"
