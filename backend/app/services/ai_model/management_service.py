@@ -263,12 +263,12 @@ class ManagementService:
             "is_enabled": model.is_enabled,
             "is_default": model.is_default,
             "model_settings": model.model_settings or {},
-            # 能力配置 - 为NULL值提供默认值
-            "supports_chat": model.supports_chat or True,
-            "supports_embeddings": model.supports_embeddings or False,
-            "supports_vision": model.supports_vision or False,
-            "supports_tools": model.supports_tools or False,
-            "supports_image_generation": model.supports_image_generation or False,
+            # 能力配置 - 直接使用数据库值，不提供默认值
+            "supports_chat": model.supports_chat,
+            "supports_embeddings": model.supports_embeddings,
+            "supports_vision": model.supports_vision,
+            "supports_tools": model.supports_tools,
+            "supports_image_generation": model.supports_image_generation,
             "created_at": model.created_at,
             "updated_at": model.updated_at
         }
