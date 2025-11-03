@@ -53,6 +53,12 @@ class ManagementService:
                 "is_enabled": model.is_enabled,
                 "is_default": model.is_default,
                 "model_settings": model.model_settings or {},
+                # 添加能力字段，用于前端确定模型类型
+                "supports_chat": model.supports_chat,
+                "supports_image_generation": model.supports_image_generation,
+                "supports_embeddings": model.supports_embeddings,
+                "supports_vision": model.supports_vision,
+                "supports_tools": model.supports_tools,
                 "created_at": model.created_at,
                 "updated_at": model.updated_at
             }
