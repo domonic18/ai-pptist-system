@@ -61,7 +61,7 @@ class SlidesStreamHandler:
                 content=request.content,
                 language=request.language or "中文",
                 style=request.style or "professional",
-                model_config={"model": request.model} if request.model else None
+                ai_model_config={"model": request.model} if request.model else None
             ):
                 yield f"data: {event}\n\n"
 

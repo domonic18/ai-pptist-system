@@ -69,7 +69,7 @@ class MockOutlineService:
         user_prompt: str,
         temperature: float,
         max_tokens: int,
-        model_config: Optional[Dict[str, Any]] = None
+        ai_model_config: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """
         模拟大纲流式调用
@@ -79,7 +79,7 @@ class MockOutlineService:
             user_prompt: 用户提示词
             temperature: 温度参数
             max_tokens: 最大token数
-            model_config: 模型配置
+            ai_model_config: 模型配置
 
         Returns:
             AsyncGenerator[str, None]: 内容块生成器
@@ -119,7 +119,7 @@ class MockOutlineService:
         user_prompt: str,
         temperature: float,
         max_tokens: int,
-        model_config: Optional[Dict[str, Any]] = None
+        ai_model_config: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         模拟大纲调用（用于最终解析）
@@ -129,7 +129,7 @@ class MockOutlineService:
             user_prompt: 用户提示词
             temperature: 温度参数
             max_tokens: 最大token数
-            model_config: 模型配置
+            ai_model_config: 模型配置
 
         Returns:
             str: 完整的大纲响应内容

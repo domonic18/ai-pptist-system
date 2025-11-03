@@ -61,7 +61,7 @@ class OutlineStreamHandler:
                 input_content=request.input_content,
                 slide_count=request.slide_count or 8,
                 language=request.language or "zh-CN",
-                model_config=request.model_settings
+                ai_model_config=request.ai_model_config
             ):
                 yield f"data: {event}\n\n"
 

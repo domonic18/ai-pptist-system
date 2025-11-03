@@ -208,7 +208,7 @@ class AIClient:
         user_prompt: str,
         temperature: float,
         max_tokens: int,
-        model_config: Optional[Dict[str, Any]] = None
+        ai_model_config: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """
         流式调用AI模型API，支持MLflow追踪
@@ -220,7 +220,7 @@ class AIClient:
             user_prompt: 用户提示词
             temperature: 温度参数
             max_tokens: 最大token数
-            model_config: 模型配置
+            ai_model_config: 模型配置
 
         Returns:
             AsyncGenerator[str, None]: 内容块生成器
@@ -230,7 +230,7 @@ class AIClient:
             await self._ensure_models_loaded()
 
             # 获取模型配置
-            model_name = model_config.get("model") if model_config else None
+            model_name = ai_model_config.get("model") if ai_model_config else None
             model = await self.get_text_model_by_name(model_name) if model_name else self.default_text_model
 
             if not model:
@@ -285,7 +285,7 @@ class AIClient:
                 "流式AI调用失败",
                 operation="ai_stream_call_failed",
                 exception=e,
-                model_config=model_config
+                ai_model_config=ai_model_config
             )
             raise
 
@@ -295,7 +295,7 @@ class AIClient:
         user_prompt: str,
         temperature: float,
         max_tokens: int,
-        model_config: Optional[Dict[str, Any]] = None
+        ai_model_config: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         同步调用AI模型API，支持MLflow追踪
@@ -305,7 +305,7 @@ class AIClient:
             user_prompt: 用户提示词
             temperature: 温度参数
             max_tokens: 最大token数
-            model_config: 模型配置
+            ai_model_config: 模型配置
 
         Returns:
             str: AI响应内容
@@ -315,8 +315,25 @@ class AIClient:
             await self._ensure_models_loaded()
 
             # 获取模型配置
-            model_name = model_config.get("model") if model_config else None
+            model_name = ai_model_config.get("model") if ai_model_config else None
+
+            # 调试日志：记录传入的模型配置
+            logger.debug(
+                "模型配置调试",
+                operation="ai_model_config_debug",
+                ai_model_config=ai_model_config,
+                model_name=model_name
+            )
+
             model = await self.get_text_model_by_name(model_name) if model_name else self.default_text_model
+
+            # 调试日志：记录最终选择的模型
+            logger.debug(
+                "模型选择调试",
+                operation="model_selection_debug",
+                selected_model_name=model.name if model else None,
+                default_model_name=self.default_text_model.name if self.default_text_model else None
+            )
 
             if not model:
                 raise ValueError("没有可用的AI模型配置")
@@ -360,6 +377,6 @@ class AIClient:
                 "AI模型调用失败",
                 operation="ai_call_failed",
                 exception=e,
-                model_config=model_config
+                ai_model_config=ai_model_config
             )
             raise

@@ -39,7 +39,7 @@ class SlidesStreamService:
         content: str,
         language: str = "zh-CN",
         style: str = "professional",
-        model_config: Optional[Dict[str, Any]] = None
+        ai_model_config: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """
         流式生成演示文稿幻灯片内容
@@ -48,7 +48,7 @@ class SlidesStreamService:
             content: 原始Markdown大纲内容
             language: 输出语言
             style: 演示文稿风格
-            model_config: 模型配置
+            ai_model_config: 模型配置
 
         Returns:
             AsyncGenerator[str, None]: SSE事件生成器
@@ -107,7 +107,7 @@ class SlidesStreamService:
                     user_prompt=user_prompt,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    model_config=model_config
+                    ai_model_config=ai_model_config
                 ):
                     # 直接发送幻灯片事件
                     yield slide_event
@@ -136,7 +136,7 @@ class SlidesStreamService:
                     user_prompt=user_prompt,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    model_config=model_config
+                    ai_model_config=ai_model_config
                 ):
                     # 累积内容
                     accumulated_content += chunk

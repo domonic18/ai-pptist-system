@@ -64,6 +64,10 @@ class LayoutOptimizationRequest(BaseModel):
         default=None,
         description="用户自定义提示词"
     )
+    ai_model_config: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="AI模型配置（包含选择的模型名称等）"
+    )
 
 
 class LayoutOptimizationResponseData(BaseModel):

@@ -38,7 +38,7 @@ class OutlineStreamService:
         input_content: Optional[str] = None,
         slide_count: int = 8,
         language: str = "zh-CN",
-        model_config: Optional[Dict[str, Any]] = None
+        ai_model_config: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """
         流式生成演示文稿大纲
@@ -48,7 +48,7 @@ class OutlineStreamService:
             input_content: 输入内容或提示
             slide_count: 幻灯片数量
             language: 输出语言
-            model_config: 模型配置
+            ai_model_config: 模型配置
 
         Returns:
             AsyncGenerator[str, None]: SSE事件生成器
@@ -105,7 +105,7 @@ class OutlineStreamService:
                     user_prompt=user_prompt,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    model_config=model_config
+                    ai_model_config=ai_model_config
                 ):
                     # 累积内容用于后续解析
                     accumulated_content += chunk
@@ -130,7 +130,7 @@ class OutlineStreamService:
                     user_prompt=user_prompt,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    model_config=model_config
+                    ai_model_config=ai_model_config
                 ):
                     # 累积内容用于后续解析
                     accumulated_content += chunk

@@ -3,7 +3,7 @@
 负责LLM调用、结果验证
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.layout_optimization import (
@@ -37,7 +37,8 @@ class LayoutOptimizationService:
         elements: List[ElementData],
         canvas_size: CanvasSize,
         options: Optional[OptimizationOptions] = None,
-        user_prompt: Optional[str] = None
+        user_prompt: Optional[str] = None,
+        ai_model_config: Optional[Dict[str, Any]] = None
     ) -> List[ElementData]:
         """
         优化幻灯片布局的核心方法
@@ -101,7 +102,8 @@ class LayoutOptimizationService:
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 temperature=temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                ai_model_config=ai_model_config
             )
 
             logger.info(

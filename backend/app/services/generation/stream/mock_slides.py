@@ -95,7 +95,7 @@ class MockSlidesService:
         user_prompt: str,
         temperature: float,
         max_tokens: int,
-        model_config: Optional[Dict[str, Any]] = None
+        ai_model_config: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """
         模拟幻灯片流式调用
@@ -105,7 +105,7 @@ class MockSlidesService:
             user_prompt: 用户提示词
             temperature: 温度参数
             max_tokens: 最大token数
-            model_config: 模型配置
+            ai_model_config: 模型配置
 
         Returns:
             AsyncGenerator[str, None]: 幻灯片事件生成器
@@ -145,7 +145,7 @@ class MockSlidesService:
         user_prompt: str,
         temperature: float,
         max_tokens: int,
-        model_config: Optional[Dict[str, Any]] = None
+        ai_model_config: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
         模拟幻灯片调用（用于批量处理）
@@ -155,7 +155,7 @@ class MockSlidesService:
             user_prompt: 用户提示词
             temperature: 温度参数
             max_tokens: 最大token数
-            model_config: 模型配置
+            ai_model_config: 模型配置
 
         Returns:
             List[Dict[str, Any]]: 完整的幻灯片响应内容列表

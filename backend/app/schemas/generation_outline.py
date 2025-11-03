@@ -32,7 +32,7 @@ class OutlineGenerationRequest(BaseModel):
     input_content: Optional[str] = Field(None, description="输入内容或提示")
     slide_count: int = Field(10, ge=5, le=25, description="幻灯片数量")
     language: str = Field("zh-CN", description="输出语言")
-    model_settings: Optional[Dict[str, Any]] = Field(None, description="模型配置")
+    ai_model_config: Optional[Dict[str, Any]] = Field(None, description="AI模型配置")
 
     model_config = {
         "protected_namespaces": ()
