@@ -68,6 +68,12 @@ class LayoutOptimizationRequest(BaseModel):
         default=None,
         description="AI模型配置（包含选择的模型名称等）"
     )
+    temperature: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=2.0,
+        description="温度参数（0.0-2.0），控制生成多样性，None时使用模板默认值"
+    )
 
 
 class LayoutOptimizationResponseData(BaseModel):

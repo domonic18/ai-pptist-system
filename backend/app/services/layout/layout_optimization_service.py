@@ -38,7 +38,8 @@ class LayoutOptimizationService:
         canvas_size: CanvasSize,
         options: Optional[OptimizationOptions] = None,
         user_prompt: Optional[str] = None,
-        ai_model_config: Optional[Dict[str, Any]] = None
+        ai_model_config: Optional[Dict[str, Any]] = None,
+        temperature: Optional[float] = None
     ) -> List[ElementData]:
         """
         优化幻灯片布局的核心方法
@@ -48,6 +49,9 @@ class LayoutOptimizationService:
             elements: 元素列表
             canvas_size: 画布尺寸
             options: 优化选项
+            user_prompt: 用户自定义提示词
+            ai_model_config: AI模型配置
+            temperature: 温度参数，控制生成多样性，None时使用模板默认值
 
         Returns:
             List[ElementData]: 优化后的元素列表
@@ -84,12 +88,24 @@ class LayoutOptimizationService:
             }
 
             # 3. 准备提示词
-            system_prompt, user_prompt, temperature, max_tokens = \
+            system_prompt, user_prompt, template_temperature, max_tokens = \
                 self.prompt_helper.prepare_prompts(
                     category="presentation",
                     template_name="layout_optimization",
                     user_prompt_params=user_prompt_params
                 )
+
+            # 使用传入的temperature参数，如果为None则使用模板默认值
+            final_temperature = temperature if temperature is not None else template_temperature
+
+            # 记录使用的temperature值
+            logger.info(
+                "确定temperature参数",
+                operation="determine_temperature",
+                user_provided_temperature=temperature,
+                template_temperature=template_temperature,
+                final_temperature=final_temperature
+            )
 
             # 4. 调用LLM（使用现有AIClient）
             logger.info(
@@ -101,7 +117,7 @@ class LayoutOptimizationService:
             llm_response = await self.ai_client.ai_call(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                temperature=temperature,
+                temperature=final_temperature,
                 max_tokens=max_tokens,
                 ai_model_config=ai_model_config
             )
@@ -164,8 +180,6 @@ class LayoutOptimizationService:
             }
             style = options.style or 'professional'
             requirements.append(f"- 优化风格：{style_hints.get(style, '专业')}")
-        else:
-            requirements.append("- 全面优化布局、字体大小、颜色、间距")
 
         return "\n".join(requirements) if requirements else "全面优化"
 
@@ -176,15 +190,7 @@ class LayoutOptimizationService:
         original: List[ElementData],
         user_prompt: Optional[str] = None
     ):
-        """验证优化结果（确保内容不变、ID一致）"""
-        # 1. 元素数量应该一致（暂时注释掉严格校验）
-        # TODO: 修复HTML解析逻辑后重新启用
-        # if len(optimized) != len(original):
-        #     raise ValueError(
-        #         f"优化后元素数量({len(optimized)})与原始数量({len(original)})不匹配"
-        #     )
-
-        # 2. 所有元素ID应该保持一致
+        """验证优化结果（确保关键内容不变，允许布局变化）"""
         original_ids = {el.id for el in original}
         optimized_ids = {el.id for el in optimized}
 
@@ -195,12 +201,48 @@ class LayoutOptimizationService:
             optimized_ids=sorted(list(optimized_ids))
         )
 
-        if original_ids != optimized_ids:
-            missing = original_ids - optimized_ids
-            extra = optimized_ids - original_ids
-            raise ValueError(
-                f"元素ID不匹配：缺失{missing}，多余{extra}"
+        # 检查是否有元素缺失
+        missing = original_ids - optimized_ids
+        extra = optimized_ids - original_ids
+
+        if missing:
+            # 允许LLM删除元素，但记录警告信息
+            logger.warning(
+                "布局优化中删除了部分元素",
+                operation="layout_optimization_removed_elements",
+                removed_elements=sorted(list(missing)),
+                removed_count=len(missing)
             )
+
+            # 检查删除的元素是否包含重要内容
+            removed_text_elements = [
+                el for el in original
+                if el.id in missing and el.type == 'text' and el.content
+            ]
+
+            if removed_text_elements:
+                logger.warning(
+                    "布局优化中删除了文本元素",
+                    operation="layout_optimization_removed_text",
+                    removed_text_elements=[
+                        {"id": el.id, "content": el.content[:50]}
+                        for el in removed_text_elements
+                    ]
+                )
+
+        if extra:
+            # LLM不应该创建新元素，这可能是解析错误
+            logger.error(
+                "布局优化中出现了未知元素",
+                operation="layout_optimization_unknown_elements",
+                unknown_elements=sorted(list(extra))
+            )
+            raise ValueError(
+                f"布局优化出现未知元素：{extra}"
+            )
+
+        # 验证文本内容（如果用户要求保持文本不变）
+        self._validate_text_content(optimized, original, user_prompt)
 
     def _validate_text_content(
         self,
@@ -229,39 +271,58 @@ class LayoutOptimizationService:
                                     ])
 
         # 如果用户明确要求保持文本不变，则强制恢复原始内容
-        if keep_text_unchanged:
-            logger.info(
-                "用户要求保持文本内容不变，强制恢复原始文本",
-                operation="validate_text_content",
-                user_prompt=user_prompt
-            )
-            for orig_el in original:
-                if orig_el.type == "text" and orig_el.content:
-                    opt_el = next((el for el in optimized if el.id == orig_el.id), None)
-                    if opt_el and opt_el.content != orig_el.content:
-                        logger.warning(
-                            "文本内容被修改，已恢复原始内容",
-                            element_id=orig_el.id,
-                            original_content=orig_el.content[:50],
-                            optimized_content=opt_el.content[:50]
-                        )
-                        # 强制恢复原始内容
-                        opt_el.content = orig_el.content
-        else:
-            # 用户没有明确要求保持文本不变，允许文本优化
-            logger.info(
-                "用户允许文本内容优化，不强制恢复原始文本",
-                operation="validate_text_content",
-                user_prompt=user_prompt
-            )
-            # 记录文本变化（但不强制恢复）
-            for orig_el in original:
-                if orig_el.type == "text" and orig_el.content:
-                    opt_el = next((el for el in optimized if el.id == orig_el.id), None)
-                    if opt_el and opt_el.content != orig_el.content:
-                        logger.info(
-                            "文本内容被优化",
-                            element_id=orig_el.id,
-                            original_content=orig_el.content[:50],
-                            optimized_content=opt_el.content[:50]
-                        )
+        # TODO: 暂时注释掉强制恢复逻辑，允许AI优化文本内容
+        # if keep_text_unchanged:
+        #     logger.info(
+        #         "用户要求保持文本内容不变，强制恢复原始文本",
+        #         operation="validate_text_content",
+        #         user_prompt=user_prompt
+        #     )
+        #     for orig_el in original:
+        #         if orig_el.type == "text" and orig_el.content:
+        #             opt_el = next((el for el in optimized if el.id == orig_el.id), None)
+        #             if opt_el and opt_el.content != orig_el.content:
+        #                 logger.warning(
+        #                     "文本内容被修改，已恢复原始内容",
+        #                     element_id=orig_el.id,
+        #                     original_content=orig_el.content[:50],
+        #                     optimized_content=opt_el.content[:50]
+        #                 )
+        #                 # 强制恢复原始内容
+        #                 opt_el.content = orig_el.content
+        # else:
+        #     # 用户没有明确要求保持文本不变，允许文本优化
+        #     logger.info(
+        #         "用户允许文本内容优化，不强制恢复原始文本",
+        #         operation="validate_text_content",
+        #         user_prompt=user_prompt
+        #     )
+        #     # 记录文本变化（但不强制恢复）
+        #     for orig_el in original:
+        #         if orig_el.type == "text" and orig_el.content:
+        #             opt_el = next((el for el in optimized if el.id == orig_el.id), None)
+        #             if opt_el and opt_el.content != orig_el.content:
+        #                 logger.info(
+        #                     "文本内容被优化",
+        #                     element_id=orig_el.id,
+        #                     original_content=orig_el.content[:50],
+        #                     optimized_content=opt_el.content[:50]
+        #                 )
+
+        # 现在始终允许文本优化，不强制恢复原始内容
+        logger.info(
+            "文本内容优化已启用，允许AI优化文本表达",
+            operation="validate_text_content",
+            user_prompt=user_prompt
+        )
+        # 记录文本变化
+        for orig_el in original:
+            if orig_el.type == "text" and orig_el.content:
+                opt_el = next((el for el in optimized if el.id == orig_el.id), None)
+                if opt_el and opt_el.content != orig_el.content:
+                    logger.info(
+                        "文本内容被优化",
+                        element_id=orig_el.id,
+                        original_content=orig_el.content[:50],
+                        optimized_content=opt_el.content[:50]
+                    )

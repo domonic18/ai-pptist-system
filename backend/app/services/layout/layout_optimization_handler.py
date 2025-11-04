@@ -86,7 +86,8 @@ class LayoutOptimizationHandler:
                 canvas_size=request.canvas_size,
                 options=request.options,
                 user_prompt=request.user_prompt,
-                ai_model_config=request.ai_model_config
+                ai_model_config=request.ai_model_config,
+                temperature=request.temperature
             )
 
             # 构建响应数据
