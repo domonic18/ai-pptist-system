@@ -119,7 +119,7 @@ class Settings(BaseSettings):
     # ==================== AI模型默认配置 ====================
     ai_default_temperature: float = 0.7
     ai_default_max_tokens: int = 8192
-    ai_default_timeout: int = 180
+    ai_default_timeout: int = 240
 
     # ==================== 图片生成配置 ====================
     # 图片尺寸映射配置 (width, height) -> "size_string"
