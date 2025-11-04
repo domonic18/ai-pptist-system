@@ -44,7 +44,7 @@ class ImageSearchService:
                     search_results.append({
                         "id": image.id,
                         "prompt": image.description or image.original_filename,
-                        "model_name": image.model_name or "unknown",
+                        "model_name": image.generation_model or "unknown",
                         "width": image.width,
                         "height": image.height,
                         "file_size": image.file_size,
@@ -120,7 +120,7 @@ class ImageSearchService:
                 results.append({
                     "id": image.id,
                     "prompt": image.description or image.original_filename,
-                    "model_name": image.model_name or "unknown",
+                    "model_name": image.generation_model or "unknown",
                     "width": image.width,
                     "height": image.height,
                     "file_size": image.file_size,

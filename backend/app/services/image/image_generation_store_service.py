@@ -50,7 +50,7 @@ class ImageGenerationStoreService:
                 "开始AI生成图片并存储",
                 extra={
                     "prompt": request.prompt[:100] + "..." if len(request.prompt) > 100 else request.prompt,
-                    "model_name": request.model_name,
+                    "model_name": request.generation_model,
                     "user_id": user_id,
                     "width": request.width,
                     "height": request.height
@@ -60,7 +60,7 @@ class ImageGenerationStoreService:
             # 1. 调用AI生成图片
             generation_result = await self.generation_service.generate_image(
                 prompt=request.prompt,
-                model_name=request.model_name,
+                model_name=request.generation_model,
                 width=request.width,
                 height=request.height,
                 quality=request.quality,
@@ -92,7 +92,7 @@ class ImageGenerationStoreService:
 
             if image_content:
                 # 4. 获取内容成功，上传到COS
-                cos_key = self._generate_ai_storage_key(request.model_name, user_id)
+                cos_key = self._generate_ai_storage_key(request.generation_model, user_id)
 
                 # 检测MIME类型
                 upload_mime_type = "image/png"
@@ -153,7 +153,7 @@ class ImageGenerationStoreService:
                 cos_bucket=settings.cos_bucket if cos_key else None,
                 cos_region=settings.cos_region if cos_key else None,
                 source_type="generated",
-                model_name=model_name,
+                generation_model=model_name,
                 width=request.width,
                 height=request.height,
                 file_size=file_size,

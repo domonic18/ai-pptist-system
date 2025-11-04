@@ -28,6 +28,7 @@ class ImageCreate(ImageBase):
     cos_bucket: Optional[str] = None
     cos_region: Optional[str] = None
     source_type: str = "uploaded"
+    generation_model: Optional[str] = None
 
 
 class ImageUpdate(ImageBase):
