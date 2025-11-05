@@ -9,6 +9,12 @@ from bs4 import BeautifulSoup
 
 from app.schemas.layout_optimization import ElementData
 from app.core.log_utils import get_logger
+from .html_utils import (
+    parse_inline_style,
+    parse_px_value,
+    parse_rotate_value,
+    parse_radius_value
+)
 
 logger = get_logger(__name__)
 
@@ -164,6 +170,9 @@ class HTMLParser:
 
             optimized_elements = []
 
+            # 用于生成新元素的ID计数器
+            next_new_id_counter = 1000
+
             for elem in ppt_elements:
                 element_id = elem.get('data-id')
                 element_type = elem.get('data-type')
@@ -175,23 +184,46 @@ class HTMLParser:
                     element_type=element_type
                 )
 
-                if not element_id or not element_type:
-                    logger.warning(
-                        "跳过无效元素",
-                        operation="skip_invalid_element",
-                        element_html=str(elem)[:200]
-                    )
-                    continue
+                # 处理新元素（没有data-id或data-type的元素）
+                original = None
 
-                # 获取原始元素
-                original = original_map.get(element_id)
-                if not original:
-                    logger.warning(
-                        "未找到原始元素",
-                        operation="skip_missing_original",
-                        element_id=element_id
+                if not element_id or not element_type:
+                    # 这是LLM创建的新元素，尝试自动识别类型
+                    element_class = elem.get('class', [])
+                    if isinstance(element_class, list):
+                        element_class = ' '.join(element_class)
+
+                    # 根据class名称推断元素类型
+                    if 'shape' in element_class or 'background' in elem.get('style', ''):
+                        element_type = 'shape'
+                    elif 'text' in element_class or elem.get_text(strip=True):
+                        element_type = 'text'
+                    elif 'image' in element_class:
+                        element_type = 'image'
+                    else:
+                        element_type = 'shape'  # 默认为形状
+
+                    # 生成新的element_id
+                    if not element_id:
+                        element_id = f"generated_{next_new_id_counter}"
+                        next_new_id_counter += 1
+
+                    logger.info(
+                        "发现新元素，自动生成ID和类型",
+                        operation="auto_generate_element",
+                        generated_id=element_id,
+                        inferred_type=element_type,
+                        element_class=element_class
                     )
-                    continue
+                else:
+                    # 获取原始元素
+                    original = original_map.get(element_id)
+                    if not original:
+                        logger.warning(
+                            "未找到原始元素，但保留为新生成的装饰元素",
+                            operation="treat_as_new_element",
+                            element_id=element_id
+                        )
 
                 # 解析样式
                 style_dict = self._parse_inline_style(elem.get('style', ''))
@@ -199,11 +231,20 @@ class HTMLParser:
                 # 根据类型解析元素
                 try:
                     if element_type == 'text':
-                        optimized = self._parse_text_element(elem, style_dict, original)
+                        if original:
+                            optimized = self._parse_text_element(elem, style_dict, original)
+                        else:
+                            optimized = self._parse_new_text_element(elem, style_dict, element_id)
                     elif element_type == 'shape':
-                        optimized = self._parse_shape_element(elem, style_dict, original)
+                        if original:
+                            optimized = self._parse_shape_element(elem, style_dict, original)
+                        else:
+                            optimized = self._parse_new_shape_element(elem, style_dict, element_id)
                     elif element_type == 'image':
-                        optimized = self._parse_image_element(elem, style_dict, original)
+                        if original:
+                            optimized = self._parse_image_element(elem, style_dict, original)
+                        else:
+                            optimized = self._parse_new_image_element(elem, style_dict, element_id)
                     elif element_type == 'line':
                         # 线条元素保持原样
                         optimized = original
@@ -228,8 +269,9 @@ class HTMLParser:
                         error=str(e),
                         traceback=traceback.format_exc()
                     )
-                    # 解析失败时使用原始元素
-                    optimized_elements.append(original)
+                    # 解析失败时，如果是新元素则跳过，否则使用原始元素
+                    if original:
+                        optimized_elements.append(original)
 
             # 验证结果：确保至少有一些元素被优化
             if len(optimized_elements) == 0:
@@ -264,17 +306,24 @@ class HTMLParser:
     
     def _find_ppt_elements(self, soup: BeautifulSoup) -> List:
         """
-        查找所有PPT元素，使用多种选择器策略
-        
+        查找所有PPT元素，包括LLM创建的新元素
+
         Args:
             soup: BeautifulSoup对象
-            
+
         Returns:
             List: 找到的元素列表
         """
-        # 方法1：通过class查找
+        # 方法1：通过class查找（原始元素）
         ppt_elements = soup.find_all(class_='ppt-element')
-        
+
+        # 方法2：查找所有直接在ppt-canvas下的div（包括新元素）
+        canvas = soup.find('div', class_='ppt-canvas')
+        if canvas:
+            canvas_divs = canvas.find_all('div', recursive=False)
+            # 添加这些div（可能包含装饰性元素）
+            ppt_elements.extend(canvas_divs)
+
         if ppt_elements:
             logger.debug(
                 "使用主选择器查找元素",
@@ -282,10 +331,10 @@ class HTMLParser:
                 found_count=len(ppt_elements)
             )
             return ppt_elements
-        
-        # 方法2：通过包含data-id属性的div查找
+
+        # 方法3：通过包含data-id属性的div查找
         ppt_elements = soup.find_all('div', attrs={'data-id': True})
-        
+
         if ppt_elements:
             logger.info(
                 "使用备用选择器查找元素",
@@ -293,69 +342,51 @@ class HTMLParser:
                 found_count=len(ppt_elements)
             )
             return ppt_elements
-        
-        # 方法3：查找所有div，然后筛选有data-id的
+
+        # 方法4：查找ppt-canvas下的所有div（包括装饰元素）
+        if canvas:
+            all_canvas_divs = canvas.find_all('div')
+            logger.info(
+                "查找canvas下所有div",
+                operation="find_all_canvas_divs",
+                found_count=len(all_canvas_divs)
+            )
+            return all_canvas_divs
+
+        # 最后回退：查找所有div
         all_divs = soup.find_all('div')
-        ppt_elements = [div for div in all_divs if div.get('data-id')]
-        
         logger.info(
-            "使用通用选择器查找元素",
-            operation="generic_element_search",
-            found_count=len(ppt_elements)
+            "查找所有div",
+            operation="find_all_divs",
+            found_count=len(all_divs)
         )
-        
-        return ppt_elements
+
+        return all_divs
     
     def _parse_inline_style(self, style_str: str) -> Dict[str, str]:
         """
         解析内联样式字符串为字典
-        
+
         Args:
             style_str: 样式字符串，如 "position: absolute; left: 100px"
-            
+
         Returns:
             Dict[str, str]: 样式字典
         """
-        style_dict = {}
-        if not style_str:
-            return style_dict
-        
-        for item in style_str.split(';'):
-            item = item.strip()
-            if ':' in item:
-                key, value = item.split(':', 1)
-                style_dict[key.strip()] = value.strip()
-        
-        return style_dict
+        return parse_inline_style(style_str)
     
     def _parse_px_value(self, value: str, default: float = 0.0) -> float:
         """
         解析px值，支持auto等特殊值
-        
+
         Args:
             value: 如 "100px" 或 "100" 或 "auto"
             default: 当无法解析时返回的默认值
-            
+
         Returns:
             float: 数值
         """
-        if not value:
-            return default
-        
-        value = str(value).strip().lower()
-        
-        # 如果是auto或其他非数值，返回默认值
-        if value == 'auto' or value == 'inherit' or value == 'initial':
-            return default
-        
-        # 移除px后缀
-        if value.endswith('px'):
-            value = value[:-2]
-        
-        try:
-            return float(value)
-        except (ValueError, TypeError):
-            return default
+        return parse_px_value(value, default)
     
     def _parse_rotate_value(self, transform: str) -> float:
         """
@@ -367,17 +398,7 @@ class HTMLParser:
         Returns:
             float: 角度值
         """
-        if not transform:
-            return 0.0
-
-        match = re.search(r'rotate\s*\(\s*([-\d.]+)deg\s*\)', transform)
-        if match:
-            try:
-                return float(match.group(1))
-            except (ValueError, TypeError):
-                pass
-
-        return 0.0
+        return parse_rotate_value(transform)
 
     def _parse_radius_value(self, radius_str: str) -> Optional[float]:
         """
@@ -389,26 +410,7 @@ class HTMLParser:
         Returns:
             Optional[float]: 圆角半径值，如果无法解析则返回None
         """
-        if not radius_str:
-            return None
-
-        radius_str = str(radius_str).strip().lower()
-
-        # 处理多个值的情况（如 "10px 20px"），取第一个值
-        parts = radius_str.split()
-        if parts:
-            first_value = parts[0]
-
-            # 移除px后缀
-            if first_value.endswith('px'):
-                first_value = first_value[:-2]
-
-            try:
-                return float(first_value)
-            except (ValueError, TypeError):
-                pass
-
-        return None
+        return parse_radius_value(radius_str)
     
     def _parse_text_element(
         self,
@@ -524,7 +526,143 @@ class HTMLParser:
         # 这些样式由LLM优化，但在转换回PPTist元素时会被忽略
         
         return optimized
-    
+
+    def _parse_new_text_element(
+        self,
+        elem: BeautifulSoup,
+        style_dict: Dict[str, str],
+        element_id: str
+    ) -> ElementData:
+        """
+        解析新创建的文本元素
+
+        Args:
+            elem: BeautifulSoup元素
+            style_dict: 样式字典
+            element_id: 元素ID
+
+        Returns:
+            ElementData: 解析后的文本元素
+        """
+        # 提取文本内容
+        text_content = elem.get_text(strip=True)
+
+        # 构建新元素
+        optimized = ElementData(
+            id=element_id,
+            type='text',
+            # 位置和尺寸
+            left=self._parse_px_value(style_dict.get('left', '100')),
+            top=self._parse_px_value(style_dict.get('top', '100')),
+            width=self._parse_px_value(style_dict.get('width', '200')),
+            height=self._parse_px_value(style_dict.get('height', '50')),
+            rotate=self._parse_rotate_value(style_dict.get('transform', '')),
+            # 文本内容
+            content=text_content or '新文本',
+            # 默认字体样式
+            defaultFontName='Arial',
+            defaultColor=style_dict.get('color', '#333333'),
+            lineHeight=1.5,
+            fontSize=self._parse_px_value(style_dict.get('font-size', '16')),
+            fontWeight=style_dict.get('font-weight', 'normal'),
+            textAlign=style_dict.get('text-align', 'left'),
+        )
+
+        return optimized
+
+    def _parse_new_shape_element(
+        self,
+        elem: BeautifulSoup,
+        style_dict: Dict[str, str],
+        element_id: str
+    ) -> ElementData:
+        """
+        解析新创建的形状元素
+
+        Args:
+            elem: BeautifulSoup元素
+            style_dict: 样式字典
+            element_id: 元素ID
+
+        Returns:
+            ElementData: 解析后的形状元素
+        """
+        # 提取形状内部文字
+        shape_text_elem = elem.find(class_='shape-text')
+        text_content = shape_text_elem.get_text(strip=True) if shape_text_elem else ''
+
+        # 处理背景颜色或渐变
+        fill_value = style_dict.get('background-color', '#ffffff')
+        if 'background' in style_dict:
+            bg = style_dict['background']
+            # 如果是gradient，使用第一个颜色
+            if 'gradient' in bg.lower():
+                # 提取gradient中的第一个颜色
+                import re
+                color_match = re.search(r'#[0-9a-fA-F]{6}', bg)
+                if color_match:
+                    fill_value = color_match.group(0)
+                else:
+                    fill_value = '#47acc5'  # 默认主题色
+            else:
+                fill_value = bg
+
+        optimized = ElementData(
+            id=element_id,
+            type='shape',
+            # 位置和尺寸
+            left=self._parse_px_value(style_dict.get('left', '100')),
+            top=self._parse_px_value(style_dict.get('top', '100')),
+            width=self._parse_px_value(style_dict.get('width', '100')),
+            height=self._parse_px_value(style_dict.get('height', '100')),
+            rotate=self._parse_rotate_value(style_dict.get('transform', '')),
+            # 形状样式
+            fill=fill_value,
+            outline=None,
+            text={"content": text_content} if text_content else {"content": ""},
+        )
+
+        return optimized
+
+    def _parse_new_image_element(
+        self,
+        elem: BeautifulSoup,
+        style_dict: Dict[str, str],
+        element_id: str
+    ) -> ElementData:
+        """
+        解析新创建的图片元素
+
+        Args:
+            elem: BeautifulSoup元素
+            style_dict: 样式字典
+            element_id: 元素ID
+
+        Returns:
+            ElementData: 解析后的图片元素
+        """
+        # 尝试从内部<img>标签获取src
+        img_tag = elem.find('img')
+        src = img_tag.get('src', '') if img_tag else elem.get('src', '')
+
+        optimized = ElementData(
+            id=element_id,
+            type='image',
+            # 位置和尺寸
+            left=self._parse_px_value(style_dict.get('left', '100')),
+            top=self._parse_px_value(style_dict.get('top', '100')),
+            width=self._parse_px_value(style_dict.get('width', '200')),
+            height=self._parse_px_value(style_dict.get('height', '150')),
+            rotate=self._parse_rotate_value(style_dict.get('transform', '')),
+            # 图片源
+            src=src,
+            fixedRatio=True,
+            # 圆角半径
+            radius=self._parse_radius_value(style_dict.get('border-radius', '0')),
+        )
+
+        return optimized
+
     def _parse_image_element(
         self,
         elem: BeautifulSoup,

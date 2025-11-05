@@ -5,6 +5,11 @@ HTML转换器模块
 
 from typing import List
 from app.schemas.layout_optimization import ElementData, CanvasSize
+from .html_utils import (
+    parse_shadow_style,
+    parse_filter_style,
+    parse_outline_style
+)
 
 
 class HTMLConverter:
@@ -56,8 +61,8 @@ class HTMLConverter:
             'position: absolute',
             f'left: {int(el.left)}px',
             f'top: {int(el.top)}px',
-            f'width: {int(el.width)}px',
-            f'height: {int(el.height)}px',
+            f'width: {int(el.width or 0)}px',
+            f'height: {int(el.height or 0)}px',
             f'transform: rotate({int(el.rotate)}deg)',
         ]
 
@@ -79,32 +84,18 @@ class HTMLConverter:
         if el.paragraphSpace:
             styles.append(f'margin-bottom: {el.paragraphSpace}px')
 
-        # 处理outline（可能是字符串或字典）
-        if el.outline:
-            if isinstance(el.outline, dict):
-                color = el.outline.get('color', '#000')
-                width = el.outline.get('width', 1)
-                style = el.outline.get('style', 'solid')
-                styles.append(f'border: {width}px {style} {color}')
-            else:
-                styles.append(f'border: 1px solid {el.outline}')
+        # 处理outline（使用共享工具函数）
+        outline_style = parse_outline_style(el.outline)
+        if outline_style:
+            width = outline_style.get('width', 1)
+            style = outline_style.get('style', 'solid')
+            color = outline_style.get('color', '#000')
+            styles.append(f'border: {width}px {style} {color}')
 
-        # 处理阴影
-        if el.shadow:
-            shadow_styles = []
-            if el.shadow.get('color'):
-                shadow_styles.append(el.shadow['color'])
-            if el.shadow.get('h') is not None:
-                shadow_styles.append(f"{el.shadow['h']}px")
-            if el.shadow.get('v') is not None:
-                shadow_styles.append(f"{el.shadow['v']}px")
-            if el.shadow.get('blur') is not None:
-                shadow_styles.append(f"{el.shadow['blur']}px")
-            if el.shadow.get('spread') is not None:
-                shadow_styles.append(f"{el.shadow['spread']}px")
-
-            if shadow_styles:
-                styles.append(f'box-shadow: {" ".join(shadow_styles)}')
+        # 处理阴影（使用共享工具函数）
+        shadow_css = parse_shadow_style(el.shadow)
+        if shadow_css:
+            styles.append(f'box-shadow: {shadow_css}')
 
         # 处理透明度
         if el.opacity is not None:
@@ -154,8 +145,8 @@ class HTMLConverter:
             'position: absolute',
             f'left: {int(el.left)}px',
             f'top: {int(el.top)}px',
-            f'width: {int(el.width)}px',
-            f'height: {int(el.height)}px',
+            f'width: {int(el.width or 0)}px',
+            f'height: {int(el.height or 0)}px',
             f'transform: rotate({int(el.rotate)}deg)',
         ]
 
@@ -167,32 +158,18 @@ class HTMLConverter:
         if el.radius:
             styles.append(f'border-radius: {int(el.radius)}px')
 
-        # 处理outline（可能是字符串或字典）
-        if el.outline:
-            if isinstance(el.outline, dict):
-                color = el.outline.get('color', '#000')
-                width = el.outline.get('width', 1)
-                style = el.outline.get('style', 'solid')
-                styles.append(f'border: {width}px {style} {color}')
-            else:
-                styles.append(f'border: 1px solid {el.outline}')
+        # 处理outline（使用共享工具函数）
+        outline_style = parse_outline_style(el.outline)
+        if outline_style:
+            width = outline_style.get('width', 1)
+            style = outline_style.get('style', 'solid')
+            color = outline_style.get('color', '#000')
+            styles.append(f'border: {width}px {style} {color}')
 
-        # 处理阴影
-        if el.shadow:
-            shadow_styles = []
-            if el.shadow.get('color'):
-                shadow_styles.append(el.shadow['color'])
-            if el.shadow.get('h') is not None:
-                shadow_styles.append(f"{el.shadow['h']}px")
-            if el.shadow.get('v') is not None:
-                shadow_styles.append(f"{el.shadow['v']}px")
-            if el.shadow.get('blur') is not None:
-                shadow_styles.append(f"{el.shadow['blur']}px")
-            if el.shadow.get('spread') is not None:
-                shadow_styles.append(f"{el.shadow['spread']}px")
-
-            if shadow_styles:
-                styles.append(f'box-shadow: {" ".join(shadow_styles)}')
+        # 处理阴影（使用共享工具函数）
+        shadow_css = parse_shadow_style(el.shadow)
+        if shadow_css:
+            styles.append(f'box-shadow: {shadow_css}')
 
         # 处理透明度
         if el.opacity is not None:
@@ -246,8 +223,8 @@ class HTMLConverter:
             'position: absolute',
             f'left: {int(el.left)}px',
             f'top: {int(el.top)}px',
-            f'width: {int(el.width)}px',
-            f'height: {int(el.height)}px',
+            f'width: {int(el.width or 0)}px',
+            f'height: {int(el.height or 0)}px',
             f'transform: rotate({int(el.rotate)}deg)',
         ]
 
@@ -255,32 +232,18 @@ class HTMLConverter:
         if el.radius:
             styles.append(f'border-radius: {int(el.radius)}px')
 
-        # 处理outline（可能是字符串或字典）
-        if el.outline:
-            if isinstance(el.outline, dict):
-                color = el.outline.get('color', '#000')
-                width = el.outline.get('width', 1)
-                style = el.outline.get('style', 'solid')
-                styles.append(f'border: {width}px {style} {color}')
-            else:
-                styles.append(f'border: 1px solid {el.outline}')
+        # 处理outline（使用共享工具函数）
+        outline_style = parse_outline_style(el.outline)
+        if outline_style:
+            width = outline_style.get('width', 1)
+            style = outline_style.get('style', 'solid')
+            color = outline_style.get('color', '#000')
+            styles.append(f'border: {width}px {style} {color}')
 
-        # 处理阴影
-        if el.shadow:
-            shadow_styles = []
-            if el.shadow.get('color'):
-                shadow_styles.append(el.shadow['color'])
-            if el.shadow.get('h') is not None:
-                shadow_styles.append(f"{el.shadow['h']}px")
-            if el.shadow.get('v') is not None:
-                shadow_styles.append(f"{el.shadow['v']}px")
-            if el.shadow.get('blur') is not None:
-                shadow_styles.append(f"{el.shadow['blur']}px")
-            if el.shadow.get('spread') is not None:
-                shadow_styles.append(f"{el.shadow['spread']}px")
-
-            if shadow_styles:
-                styles.append(f'box-shadow: {" ".join(shadow_styles)}')
+        # 处理阴影（使用共享工具函数）
+        shadow_css = parse_shadow_style(el.shadow)
+        if shadow_css:
+            styles.append(f'box-shadow: {shadow_css}')
 
         # 处理透明度
         if el.opacity is not None:
@@ -301,22 +264,10 @@ class HTMLConverter:
             full_transform = f'transform: rotate({int(el.rotate)}deg) {" ".join(flip_transforms)}'
             styles.append(full_transform)
 
-        # 处理滤镜
-        filter_styles = []
-        if el.filter:
-            if el.filter.get('brightness') is not None:
-                filter_styles.append(f"brightness({el.filter['brightness']}%)")
-            if el.filter.get('contrast') is not None:
-                filter_styles.append(f"contrast({el.filter['contrast']}%)")
-            if el.filter.get('saturation') is not None:
-                filter_styles.append(f"saturate({el.filter['saturation']}%)")
-            if el.filter.get('hue') is not None:
-                filter_styles.append(f"hue-rotate({el.filter['hue']}deg)")
-            if el.filter.get('blur') is not None:
-                filter_styles.append(f"blur({el.filter['blur']}px)")
-
-        if filter_styles:
-            styles.append(f'filter: {" ".join(filter_styles)}')
+        # 处理滤镜（使用共享工具函数）
+        filter_css = parse_filter_style(el.filter)
+        if filter_css:
+            styles.append(f'filter: {filter_css}')
 
         style_str = '; '.join(styles)
         src = el.src or ''
@@ -343,8 +294,8 @@ class HTMLConverter:
             'position: absolute',
             f'left: {int(el.left)}px',
             f'top: {int(el.top)}px',
-            f'width: {int(el.width)}px',
-            f'height: {int(el.height)}px',
+            f'width: {int(el.width or 0)}px',
+            f'height: {int(el.height or 0)}px',
             f'transform: rotate({int(el.rotate)}deg)',
         ]
 
@@ -354,32 +305,18 @@ class HTMLConverter:
         else:
             styles.append('background-color: #000000')  # 默认黑色线条
 
-        # 处理outline（可能是字符串或字典）
-        if el.outline:
-            if isinstance(el.outline, dict):
-                color = el.outline.get('color', '#000')
-                width = el.outline.get('width', 1)
-                style = el.outline.get('style', 'solid')
-                styles.append(f'border: {width}px {style} {color}')
-            else:
-                styles.append(f'border: 1px solid {el.outline}')
+        # 处理outline（使用共享工具函数）
+        outline_style = parse_outline_style(el.outline)
+        if outline_style:
+            width = outline_style.get('width', 1)
+            style = outline_style.get('style', 'solid')
+            color = outline_style.get('color', '#000')
+            styles.append(f'border: {width}px {style} {color}')
 
-        # 处理阴影
-        if el.shadow:
-            shadow_styles = []
-            if el.shadow.get('color'):
-                shadow_styles.append(el.shadow['color'])
-            if el.shadow.get('h') is not None:
-                shadow_styles.append(f"{el.shadow['h']}px")
-            if el.shadow.get('v') is not None:
-                shadow_styles.append(f"{el.shadow['v']}px")
-            if el.shadow.get('blur') is not None:
-                shadow_styles.append(f"{el.shadow['blur']}px")
-            if el.shadow.get('spread') is not None:
-                shadow_styles.append(f"{el.shadow['spread']}px")
-
-            if shadow_styles:
-                styles.append(f'box-shadow: {" ".join(shadow_styles)}')
+        # 处理阴影（使用共享工具函数）
+        shadow_css = parse_shadow_style(el.shadow)
+        if shadow_css:
+            styles.append(f'box-shadow: {shadow_css}')
 
         # 处理透明度
         if el.opacity is not None:
