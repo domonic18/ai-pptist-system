@@ -45,6 +45,54 @@ class ElementData(BaseModel):
     fixedRatio: Optional[bool] = None
     radius: Optional[float] = Field(default=None, ge=0, description="圆角半径")
 
+    # 新增样式属性
+    shadow: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="阴影样式：color, h, v, blur, spread"
+    )
+    opacity: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="透明度（0.0-1.0）"
+    )
+    flipH: Optional[bool] = Field(
+        default=None,
+        description="水平翻转"
+    )
+    flipV: Optional[bool] = Field(
+        default=None,
+        description="垂直翻转"
+    )
+
+    # 文字特有属性
+    fontSize: Optional[float] = Field(
+        default=None,
+        description="字体大小"
+    )
+    fontWeight: Optional[str] = Field(
+        default=None,
+        description="字体粗细"
+    )
+    textAlign: Optional[str] = Field(
+        default=None,
+        description="文本对齐方式"
+    )
+    wordSpace: Optional[float] = Field(
+        default=None,
+        description="字间距"
+    )
+    paragraphSpace: Optional[float] = Field(
+        default=None,
+        description="段间距"
+    )
+
+    # 图片特有属性
+    filter: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="滤镜效果"
+    )
+
 
 class LayoutOptimizationRequest(BaseModel):
     """布局优化请求"""

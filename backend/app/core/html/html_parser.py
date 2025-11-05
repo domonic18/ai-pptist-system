@@ -19,41 +19,91 @@ class HTMLParser:
     def extract_html_from_response(self, llm_response: str) -> str:
         """
         从LLM响应中提取纯HTML内容
-        
+
         Args:
             llm_response: LLM的原始响应
-            
+
         Returns:
             str: 提取的HTML内容
-            
+
         Raises:
             ValueError: 如果无法提取有效HTML
         """
+        if not llm_response or not llm_response.strip():
+            raise ValueError("LLM响应为空")
+
         html = llm_response.strip()
-        
+
+        logger.debug(
+            "开始提取HTML",
+            operation="extract_html_start",
+            response_length=len(html),
+            response_preview=html[:200] if html else ""
+        )
+
         # 1. 如果包含markdown代码块，提取代码块内容
         if '```html' in html:
             match = re.search(r'```html\s*(.*?)\s*```', html, re.DOTALL)
             if match:
                 html = match.group(1).strip()
+                logger.debug(
+                    "提取HTML代码块",
+                    operation="extract_html_codeblock",
+                    extracted_length=len(html)
+                )
         elif '```' in html:
             match = re.search(r'```\s*(.*?)\s*```', html, re.DOTALL)
             if match:
                 html = match.group(1).strip()
-        
+                logger.debug(
+                    "提取通用代码块",
+                    operation="extract_generic_codeblock",
+                    extracted_length=len(html)
+                )
+
         # 2. 验证HTML是否包含ppt-canvas
         if '<div class="ppt-canvas"' not in html and '<div class=\'ppt-canvas\'' not in html:
+            logger.error(
+                "未找到ppt-canvas元素",
+                operation="missing_ppt_canvas",
+                html_preview=html[:500] if html else ""
+            )
             raise ValueError("LLM响应中未找到ppt-canvas元素")
-        
+
         # 3. 使用BeautifulSoup验证HTML结构完整性
-        soup = BeautifulSoup(html, 'html.parser')
-        canvas = soup.find('div', class_='ppt-canvas')
-        
-        if not canvas:
-            raise ValueError("无法解析ppt-canvas元素")
-        
-        # 返回完整的canvas HTML（包括所有子元素）
-        return str(canvas)
+        try:
+            soup = BeautifulSoup(html, 'html.parser')
+            canvas = soup.find('div', class_='ppt-canvas')
+
+            if not canvas:
+                logger.error(
+                    "无法解析ppt-canvas元素",
+                    operation="parse_ppt_canvas_failed",
+                    html_preview=html[:500] if html else ""
+                )
+                raise ValueError("无法解析ppt-canvas元素")
+
+            # 返回完整的canvas HTML（包括所有子元素）
+            result = str(canvas)
+
+            logger.debug(
+                "HTML提取成功",
+                operation="extract_html_success",
+                result_length=len(result),
+                result_preview=result[:200] if result else ""
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(
+                "HTML解析异常",
+                operation="html_parse_exception",
+                error=str(e),
+                error_type=type(e).__name__,
+                html_preview=html[:500] if html else ""
+            )
+            raise ValueError(f"HTML解析失败: {str(e)}")
     
     def parse_html_to_elements(
         self,
@@ -62,118 +112,155 @@ class HTMLParser:
     ) -> List[ElementData]:
         """
         解析HTML内容，转换为PPTist元素列表
-        
+
         Args:
             html_content: HTML内容
             original_elements: 原始元素列表（用于保留未优化的字段）
-            
+
         Returns:
             List[ElementData]: 解析后的元素列表
-            
+
         Raises:
             ValueError: 如果解析失败
         """
-        soup = BeautifulSoup(html_content, 'html.parser')
-        
-        # 调试日志
-        logger.debug(
-            "HTML内容预览",
-            operation="html_content_preview",
-            html_length=len(html_content),
-            html_preview=html_content[:500] if html_content else ""
-        )
-        
-        # 构建原始元素ID映射
-        original_map = {el.id: el for el in original_elements}
-        
-        # 查找所有PPT元素 - 使用多种选择器策略
-        ppt_elements = self._find_ppt_elements(soup)
-        
-        logger.info(
-            "HTML解析开始",
-            operation="parse_html_start",
-            html_length=len(html_content),
-            found_elements_count=len(ppt_elements),
-            original_elements_count=len(original_elements)
-        )
-        
-        optimized_elements = []
-        
-        for elem in ppt_elements:
-            element_id = elem.get('data-id')
-            element_type = elem.get('data-type')
-            
-            logger.debug(
-                "解析HTML元素",
-                operation="parse_html_element",
-                element_id=element_id,
-                element_type=element_type
+        if not html_content or not html_content.strip():
+            logger.error(
+                "HTML内容为空",
+                operation="parse_html_empty_content"
             )
-            
-            if not element_id or not element_type:
-                logger.warning(
-                    "跳过无效元素",
-                    operation="skip_invalid_element",
-                    element_html=str(elem)[:200]
+            raise ValueError("HTML内容为空")
+
+        if not original_elements:
+            logger.error(
+                "原始元素列表为空",
+                operation="parse_html_empty_original"
+            )
+            raise ValueError("原始元素列表为空")
+
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # 调试日志
+            logger.debug(
+                "HTML内容预览",
+                operation="html_content_preview",
+                html_length=len(html_content),
+                html_preview=html_content[:500] if html_content else ""
+            )
+
+            # 构建原始元素ID映射
+            original_map = {el.id: el for el in original_elements}
+
+            # 查找所有PPT元素 - 使用多种选择器策略
+            ppt_elements = self._find_ppt_elements(soup)
+
+            logger.info(
+                "HTML解析开始",
+                operation="parse_html_start",
+                html_length=len(html_content),
+                found_elements_count=len(ppt_elements),
+                original_elements_count=len(original_elements)
+            )
+
+            optimized_elements = []
+
+            for elem in ppt_elements:
+                element_id = elem.get('data-id')
+                element_type = elem.get('data-type')
+
+                logger.debug(
+                    "解析HTML元素",
+                    operation="parse_html_element",
+                    element_id=element_id,
+                    element_type=element_type
                 )
-                continue
-            
-            # 获取原始元素
-            original = original_map.get(element_id)
-            if not original:
-                logger.warning(
-                    "未找到原始元素",
-                    operation="skip_missing_original",
-                    element_id=element_id
-                )
-                continue
-            
-            # 解析样式
-            style_dict = self._parse_inline_style(elem.get('style', ''))
-            
-            # 根据类型解析元素
-            try:
-                if element_type == 'text':
-                    optimized = self._parse_text_element(elem, style_dict, original)
-                elif element_type == 'shape':
-                    optimized = self._parse_shape_element(elem, style_dict, original)
-                elif element_type == 'image':
-                    optimized = self._parse_image_element(elem, style_dict, original)
-                elif element_type == 'line':
-                    # 线条元素保持原样
-                    optimized = original
-                else:
+
+                if not element_id or not element_type:
                     logger.warning(
-                        "跳过未知类型元素",
-                        operation="skip_unknown_type",
-                        element_id=element_id,
-                        element_type=element_type
+                        "跳过无效元素",
+                        operation="skip_invalid_element",
+                        element_html=str(elem)[:200]
                     )
                     continue
-                
-                optimized_elements.append(optimized)
-                
-            except Exception as e:
-                import traceback
-                logger.error(
-                    "元素解析失败",
-                    operation="parse_element_error",
-                    element_id=element_id,
-                    element_type=element_type,
-                    error=str(e),
-                    traceback=traceback.format_exc()
+
+                # 获取原始元素
+                original = original_map.get(element_id)
+                if not original:
+                    logger.warning(
+                        "未找到原始元素",
+                        operation="skip_missing_original",
+                        element_id=element_id
+                    )
+                    continue
+
+                # 解析样式
+                style_dict = self._parse_inline_style(elem.get('style', ''))
+
+                # 根据类型解析元素
+                try:
+                    if element_type == 'text':
+                        optimized = self._parse_text_element(elem, style_dict, original)
+                    elif element_type == 'shape':
+                        optimized = self._parse_shape_element(elem, style_dict, original)
+                    elif element_type == 'image':
+                        optimized = self._parse_image_element(elem, style_dict, original)
+                    elif element_type == 'line':
+                        # 线条元素保持原样
+                        optimized = original
+                    else:
+                        logger.warning(
+                            "跳过未知类型元素",
+                            operation="skip_unknown_type",
+                            element_id=element_id,
+                            element_type=element_type
+                        )
+                        continue
+
+                    optimized_elements.append(optimized)
+
+                except Exception as e:
+                    import traceback
+                    logger.error(
+                        "元素解析失败",
+                        operation="parse_element_error",
+                        element_id=element_id,
+                        element_type=element_type,
+                        error=str(e),
+                        traceback=traceback.format_exc()
+                    )
+                    # 解析失败时使用原始元素
+                    optimized_elements.append(original)
+
+            # 验证结果：确保至少有一些元素被优化
+            if len(optimized_elements) == 0:
+                logger.warning(
+                    "未找到任何可优化的元素",
+                    operation="no_optimized_elements",
+                    html_content_length=len(html_content),
+                    original_elements_count=len(original_elements)
                 )
-                # 解析失败时使用原始元素
-                optimized_elements.append(original)
-        
-        logger.info(
-            "HTML解析完成",
-            operation="parse_html_complete",
-            optimized_elements_count=len(optimized_elements),
-            found_element_ids=[el.id for el in optimized_elements]
-        )
-        
-        return optimized_elements
+                # 返回原始元素作为回退
+                return original_elements
+
+            logger.info(
+                "HTML解析完成",
+                operation="parse_html_complete",
+                optimized_elements_count=len(optimized_elements),
+                found_element_ids=[el.id for el in optimized_elements]
+            )
+
+            return optimized_elements
+
+        except Exception as e:
+            logger.error(
+                "HTML解析整体失败",
+                operation="parse_html_overall_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                html_content_length=len(html_content) if html_content else 0
+            )
+            # 解析失败时返回原始元素
+            return original_elements
     
     def _find_ppt_elements(self, soup: BeautifulSoup) -> List:
         """

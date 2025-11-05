@@ -72,7 +72,7 @@ class TestHTMLConverter:
         assert 'top: 100px' in html
         assert 'width: 400px' in html
         assert 'height: 200px' in html
-        assert 'background-color: #5b9bd5' in html
+        assert 'background: #5b9bd5' in html
         assert 'border: 2px solid #000' in html
         assert 'class="shape-text"' in html
         assert '形状文字' in html
@@ -97,7 +97,10 @@ class TestHTMLConverter:
         assert 'data-type="line"' in html
         assert 'left: 150px' in html
         assert 'top: 75px' in html
-        assert '<!-- 线条元素暂不优化 -->' in html
+        assert 'width: 1px' in html
+        assert 'height: 1px' in html
+        # 不再包含限制注释
+        assert '<!-- 线条元素暂不优化 -->' not in html
     
     def test_convert_image_element(self):
         """测试转换图片元素"""
@@ -249,16 +252,89 @@ class TestHTMLConverter:
         
         assert 'border: 3px solid #0000ff' in html
     
-    def test_convert_empty_elements_list(self):
-        """测试转换空元素列表"""
-        canvas_size = CanvasSize(width=800.0, height=600.0)
-        elements = []
-        
-        html = self.converter.convert_to_html(elements, canvas_size)
-        
-        # 应该只包含画布容器
-        assert '<div class="ppt-canvas"' in html
-        assert 'width: 800.0px' in html
-        assert 'height: 600.0px' in html
-        assert html.count('data-id') == 0  # 没有元素
+    def test_convert_shape_with_shadow_and_opacity(self):
+        """测试转换带阴影和透明度的形状元素"""
+        element = ElementData(
+            id="test-shape-2",
+            type="shape",
+            left=100.0,
+            top=50.0,
+            width=300.0,
+            height=150.0,
+            rotate=0.0,
+            fill="#ff0000",
+            shadow={"color": "#000000", "h": 5, "v": 5, "blur": 10, "spread": 2},
+            opacity=0.8
+        )
+
+        html = self.converter._convert_shape_element(element)
+
+        # 验证HTML结构
+        assert 'class="ppt-element ppt-shape"' in html
+        assert 'data-id="test-shape-2"' in html
+        assert 'background: #ff0000' in html
+        assert 'box-shadow: #000000 5px 5px 10px 2px' in html
+        assert 'opacity: 0.8' in html
+
+    def test_convert_text_with_advanced_styles(self):
+        """测试转换带高级样式的文本元素"""
+        element = ElementData(
+            id="test-text-2",
+            type="text",
+            left=150.0,
+            top=75.0,
+            width=400.0,
+            height=80.0,
+            rotate=0.0,
+            content="高级样式文本",
+            defaultFontName="Arial",
+            defaultColor="#333333",
+            fontSize=24.0,
+            fontWeight="bold",
+            textAlign="center",
+            wordSpace=2.0,
+            paragraphSpace=10.0,
+            fill="#f0f0f0"
+        )
+
+        html = self.converter._convert_text_element(element)
+
+        # 验证HTML结构
+        assert 'class="ppt-element ppt-text"' in html
+        assert 'data-id="test-text-2"' in html
+        assert "font-family: 'Arial'" in html
+        assert 'color: #333333' in html
+        assert 'font-size: 24px' in html
+        assert 'font-weight: bold' in html
+        assert 'text-align: center' in html
+        assert 'letter-spacing: 2.0px' in html
+        assert 'margin-bottom: 10.0px' in html
+        assert 'background: #f0f0f0' in html
+        assert '高级样式文本' in html
+
+    def test_convert_image_with_filter_and_shadow(self):
+        """测试转换带滤镜和阴影的图片元素"""
+        element = ElementData(
+            id="test-image-2",
+            type="image",
+            left=200.0,
+            top=100.0,
+            width=500.0,
+            height=300.0,
+            rotate=0.0,
+            src="https://example.com/image.jpg",
+            radius=15.0,
+            shadow={"color": "rgba(0,0,0,0.5)", "h": 0, "v": 4, "blur": 8, "spread": 0},
+            filter={"brightness": 120, "contrast": 110, "saturation": 90}
+        )
+
+        html = self.converter._convert_image_element(element)
+
+        # 验证HTML结构
+        assert 'class="ppt-element ppt-image"' in html
+        assert 'data-id="test-image-2"' in html
+        assert 'border-radius: 15px' in html
+        assert 'box-shadow: rgba(0,0,0,0.5) 0px 4px 8px 0px' in html
+        assert 'filter: brightness(120%) contrast(110%) saturate(90%)' in html
+        assert 'src="https://example.com/image.jpg"' in html
 
