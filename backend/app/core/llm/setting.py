@@ -12,6 +12,7 @@ class ModelSetting:
 
     def __init__(self, config_dict: Dict[str, Any]):
         self.name = config_dict.get("name", "")
+        self.ai_model_name = config_dict.get("ai_model_name", self.name)  # 默认为name
         self.api_key = config_dict.get("api_key", "")
         self.base_url = config_dict.get("base_url", "https://api.openai.com/v1")
         self.enabled = config_dict.get("enabled", True)
