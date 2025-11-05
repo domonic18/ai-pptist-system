@@ -269,8 +269,9 @@ class TestHTMLParser:
             original_elements
         )
         
-        # 空HTML应该解析出0个元素
-        assert len(optimized_elements) == 0
+        # 空HTML应该返回原始元素作为回退
+        assert len(optimized_elements) == 1
+        assert optimized_elements[0].id == "test1"
     
     def test_parse_element_with_auto_height(self):
         """测试解析带有auto高度的元素"""
