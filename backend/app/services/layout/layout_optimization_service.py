@@ -39,7 +39,9 @@ class LayoutOptimizationService:
         options: Optional[OptimizationOptions] = None,
         user_prompt: Optional[str] = None,
         ai_model_config: Optional[Dict[str, Any]] = None,
-        temperature: Optional[float] = None
+        temperature: Optional[float] = None,
+        content_analysis: Optional[str] = None,
+        layout_type_hint: Optional[str] = None
     ) -> List[ElementData]:
         """
         优化幻灯片布局的核心方法
@@ -52,6 +54,8 @@ class LayoutOptimizationService:
             user_prompt: 用户自定义提示词
             ai_model_config: AI模型配置
             temperature: 温度参数，控制生成多样性，None时使用模板默认值
+            content_analysis: 内容智能分析结果，用于指导布局选择和优化策略
+            layout_type_hint: 布局类型智能提示，基于内容语义分析的推荐布局类型
 
         Returns:
             List[ElementData]: 优化后的元素列表
@@ -84,7 +88,9 @@ class LayoutOptimizationService:
                 "canvas_width": canvas_size.width,
                 "canvas_height": canvas_size.height,
                 "html_content": html_content,
-                "requirements": requirements
+                "requirements": requirements,
+                "content_analysis": content_analysis,
+                "layout_type_hint": layout_type_hint
             }
 
             # 3. 准备提示词

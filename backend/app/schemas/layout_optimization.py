@@ -123,6 +123,16 @@ class LayoutOptimizationRequest(BaseModel):
         description="温度参数（0.0-2.0），控制生成多样性，None时使用模板默认值"
     )
 
+    # 新增智能分析参数
+    content_analysis: Optional[str] = Field(
+        default=None,
+        description="内容智能分析结果，用于指导布局选择和优化策略"
+    )
+    layout_type_hint: Optional[str] = Field(
+        default=None,
+        description="布局类型智能提示，基于内容语义分析的推荐布局类型"
+    )
+
 
 class LayoutOptimizationResponseData(BaseModel):
     """布局优化响应数据（data字段内容）"""

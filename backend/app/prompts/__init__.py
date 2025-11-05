@@ -41,7 +41,7 @@ class PromptManager:
                                 self._templates_cache[category_name][template_name] = template_data
                         except Exception as e:
                             logger.error(
-                                message=f"加载模板文件失败: {template_file}",
+                                f"加载模板文件失败: {template_file}",
                                 operation="load_template_error",
                                 exception=e
                             )
