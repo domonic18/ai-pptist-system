@@ -3,6 +3,7 @@
 负责参数验证、调用Handler、返回标准响应
 """
 
+from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,44 @@ from app.services.layout.layout_optimization_handler import LayoutOptimizationHa
 from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)
+
+
+def _remove_none_values(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    递归移除字典中的None值
+    
+    Args:
+        data: 输入字典
+        
+    Returns:
+        Dict[str, Any]: 移除None值后的字典
+    """
+    cleaned = {}
+    for key, value in data.items():
+        if value is None:
+            continue
+        elif isinstance(value, dict):
+            # 递归处理嵌套字典
+            cleaned_nested = _remove_none_values(value)
+            if cleaned_nested:  # 只保留非空字典
+                cleaned[key] = cleaned_nested
+        elif isinstance(value, list):
+            # 处理数组，移除None元素
+            cleaned_list = []
+            for item in value:
+                if item is None:
+                    continue
+                elif isinstance(item, dict):
+                    cleaned_item = _remove_none_values(item)
+                    if cleaned_item:
+                        cleaned_list.append(cleaned_item)
+                else:
+                    cleaned_list.append(item)
+            if cleaned_list:  # 只保留非空数组
+                cleaned[key] = cleaned_list
+        else:
+            cleaned[key] = value
+    return cleaned
 
 # 注意：使用空字符串""作为根路径，prefix在router.py中统一管理
 router = APIRouter(tags=["布局优化"])
@@ -51,11 +90,23 @@ async def optimize_slide_layout(
         handler = LayoutOptimizationHandler(db)
         result = await handler.handle_optimize_layout(request)
 
+        # 手动序列化数据，排除None值以避免前端处理问题
+        # 将Pydantic对象转换为字典时使用exclude_none=True
+        # 注意：关键字段（如viewBox）已在HTML解析器中确保有值，这里只清理非必要的None值
+        result_dict = result.model_dump(exclude_none=True)
+        
+        # 递归清理elements数组中每个元素的None值
+        if "elements" in result_dict and isinstance(result_dict["elements"], list):
+            result_dict["elements"] = [
+                _remove_none_values(el) if isinstance(el, dict) else el
+                for el in result_dict["elements"]
+            ]
+
         # 返回标准响应
         return StandardResponse(
             status="success",
             message="布局优化完成",
-            data=result
+            data=result_dict
         )
 
     except HTTPException:

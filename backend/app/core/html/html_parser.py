@@ -286,6 +286,10 @@ class HTMLParser:
             fill=fill_value,
             outline=original.outline,  # 保持原始轮廓
             text={"content": text_content} if text_content else {"content": ""},
+            # 保留原始元素的viewBox、path等关键字段（前端shape元素必需）
+            viewBox=original.viewBox,
+            path=original.path,
+            fixedRatio=original.fixedRatio,
         )
 
         return optimized
@@ -316,19 +320,32 @@ class HTMLParser:
             else:
                 fill_value = bg
 
+        # 解析尺寸
+        width = parse_px_value(style_dict.get('width', '100'))
+        height = parse_px_value(style_dict.get('height', '100'))
+
+        # 为新shape元素创建默认的viewBox和path（矩形）
+        # viewBox使用元素的宽高，path创建一个矩形路径
+        default_viewBox = [width, height]
+        default_path = f'M 0 0 L {width} 0 L {width} {height} L 0 {height} Z'
+
         optimized = ElementData(
             id=element_id,
             type='shape',
             # 位置和尺寸
             left=parse_px_value(style_dict.get('left', '100')),
             top=parse_px_value(style_dict.get('top', '100')),
-            width=parse_px_value(style_dict.get('width', '100')),
-            height=parse_px_value(style_dict.get('height', '100')),
+            width=width,
+            height=height,
             rotate=parse_rotate_value(style_dict.get('transform', '')),
             # 形状样式
             fill=fill_value,
             outline=None,
             text={"content": text_content} if text_content else {"content": ""},
+            # 设置默认的viewBox和path，确保前端能正确渲染
+            viewBox=default_viewBox,
+            path=default_path,
+            fixedRatio=False,
         )
 
         return optimized
