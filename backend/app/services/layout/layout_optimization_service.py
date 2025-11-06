@@ -142,17 +142,20 @@ class LayoutOptimizationService:
                 optimized_html, elements
             )
 
+            # 6.5. 清洗元素数据，移除null/undefined值
+            cleaned_elements = self._sanitize_elements_data(optimized_elements)
+
             # 7. 验证结果（确保内容不变、ID一致等）
-            self._validate_optimized_elements(optimized_elements, elements, user_prompt)
+            self._validate_optimized_elements(cleaned_elements, elements, user_prompt)
 
             logger.info(
                 "布局优化执行成功",
                 operation="optimize_layout_success",
                 slide_id=slide_id,
-                optimized_count=len(optimized_elements)
+                optimized_count=len(cleaned_elements)
             )
 
-            return optimized_elements
+            return cleaned_elements
 
         except Exception as e:
             logger.error(
@@ -394,3 +397,104 @@ class LayoutOptimizationService:
                         original_content=orig_el.content[:50],
                         optimized_content=opt_el.content[:50]
                     )
+
+    def _sanitize_elements_data(self, elements: List[ElementData]) -> List[ElementData]:
+        """
+        清洗元素数据，移除null值，避免前端运行时错误
+
+        Args:
+            elements: 原始元素列表
+
+        Returns:
+            List[ElementData]: 清洗后的元素列表
+        """
+        logger.info(
+            "开始清洗元素数据",
+            operation="sanitize_elements_data_start",
+            elements_count=len(elements)
+        )
+
+        cleaned_elements = []
+        null_fields_removed = 0
+
+        for element in elements:
+            # 获取元素的所有字段，使用exclude_none=True排除null值
+            element_dict = element.model_dump(exclude_none=True)
+
+            # 清洗单个元素的数据
+            cleaned_dict = self._sanitize_single_element(element_dict)
+
+            # 计算移除的null字段数量
+            removed_count = len([k for k, v in element_dict.items() if v is None])
+            null_fields_removed += removed_count
+
+            # 创建新的ElementData对象，使用exclude_none=True确保不包含null值
+            cleaned_element = ElementData(**cleaned_dict)
+            cleaned_elements.append(cleaned_element)
+
+            if removed_count > 0:
+                logger.debug(
+                    "元素数据清洗完成",
+                    operation="sanitize_single_element",
+                    element_id=element.id,
+                    element_type=element.type,
+                    removed_fields_count=removed_count
+                )
+
+        logger.info(
+            "元素数据清洗完成",
+            operation="sanitize_elements_data_complete",
+            original_elements_count=len(elements),
+            cleaned_elements_count=len(cleaned_elements),
+            total_null_fields_removed=null_fields_removed
+        )
+
+        return cleaned_elements
+
+    def _sanitize_single_element(self, element_dict: dict) -> dict:
+        """
+        清洗单个元素数据，移除null值
+
+        Args:
+            element_dict: 元素的字典表示
+
+        Returns:
+            dict: 清洗后的字典
+        """
+        cleaned = {}
+
+        # 需要保留的特殊字段（即使为空字符串也要保留）
+        preserve_empty_fields = {
+            'id', 'type', 'content', 'defaultFontName', 'defaultColor'
+        }
+
+        for key, value in element_dict.items():
+            # 跳过null值
+            if value is None:
+                continue
+
+            # 对于特定字段，如果为空字符串则保留（避免前端访问undefined）
+            if key in preserve_empty_fields and value == "":
+                cleaned[key] = value
+                continue
+
+            # 对于嵌套对象（如text, outline），递归清洗
+            if isinstance(value, dict):
+                cleaned_nested = self._sanitize_single_element(value)
+                # 只有在清洗后的对象不为空时才保留
+                if cleaned_nested:
+                    cleaned[key] = cleaned_nested
+                continue
+
+            # 对于数组类型（如viewBox），检查是否包含null值
+            if isinstance(value, list):
+                # 过滤掉数组中的null值
+                filtered_list = [item for item in value if item is not None]
+                if filtered_list:  # 只有在数组不为空时才保留
+                    cleaned[key] = filtered_list
+                continue
+
+            # 对于其他类型，直接保留
+            cleaned[key] = value
+
+        return cleaned
