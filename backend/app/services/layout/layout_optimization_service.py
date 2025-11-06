@@ -237,15 +237,77 @@ class LayoutOptimizationService:
                 )
 
         if extra:
-            # LLM不应该创建新元素，这可能是解析错误
-            logger.error(
-                "布局优化中出现了未知元素",
-                operation="layout_optimization_unknown_elements",
-                unknown_elements=sorted(list(extra))
-            )
-            raise ValueError(
-                f"布局优化出现未知元素：{extra}"
-            )
+            # 检查新元素的ID是否符合规范（使用nanoid格式）
+            from app.core.html.id_generator import PPTIDGenerator
+            id_generator = PPTIDGenerator()
+
+            invalid_new_ids = []
+            valid_new_ids = []
+
+            for element_id in extra:
+                # 严格验证：ID必须符合nanoid(10)格式
+                if (element_id and
+                    len(element_id) == 10 and
+                    all(char in id_generator.ALPHABET for char in element_id)):
+                    valid_new_ids.append(element_id)
+                    logger.info(
+                        "发现新元素ID",
+                        operation="new_element_id",
+                        element_id=element_id
+                    )
+                else:
+                    invalid_new_ids.append(element_id)
+                    logger.warning(
+                        "发现无效的新元素ID",
+                        operation="invalid_new_element_id",
+                        element_id=element_id
+                    )
+
+            # 只有存在无效ID时才报错
+            if invalid_new_ids:
+                logger.error(
+                    "布局优化中出现了无效ID的新元素",
+                    operation="layout_optimization_invalid_element_ids",
+                    invalid_elements=sorted(list(invalid_new_ids)),
+                    valid_elements=sorted(list(valid_new_ids)),
+                    invalid_id_details=[
+                        {
+                            "id": element_id,
+                            "length": len(element_id) if element_id else 0,
+                            "chars_valid": all(char in id_generator.ALPHABET for char in element_id) if element_id else False
+                        }
+                        for element_id in invalid_new_ids
+                    ]
+                )
+                raise ValueError(
+                    f"布局优化出现无效元素ID：{invalid_new_ids}。"
+                    f"新元素ID必须符合nanoid(10)格式（10位字母数字组合）。"
+                )
+
+            if valid_new_ids:
+                logger.info(
+                    "布局优化成功创建了新的装饰元素",
+                    operation="layout_optimization_new_elements_created",
+                    new_elements_count=len(valid_new_ids),
+                    new_element_ids=sorted(list(valid_new_ids))
+                )
+
+                # 详细记录每个新元素的信息
+                for element in optimized:
+                    if element.id in valid_new_ids:
+                        logger.info(
+                            f"新元素详情 - ID: {element.id}, 类型: {element.type}, "
+                            f"位置: ({element.left}, {element.top}), 尺寸: {element.width}x{element.height}, "
+                            f"填充: {element.fill}",
+                            operation="new_element_details",
+                            element_id=element.id,
+                            element_type=element.type,
+                            element_left=element.left,
+                            element_top=element.top,
+                            element_width=element.width,
+                            element_height=element.height,
+                            element_fill=element.fill
+                        )
 
         # 验证文本内容（如果用户要求保持文本不变）
         self._validate_text_content(optimized, original, user_prompt)

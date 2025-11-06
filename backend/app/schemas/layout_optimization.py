@@ -93,6 +93,16 @@ class ElementData(BaseModel):
         description="滤镜效果"
     )
 
+    # 形状特有属性
+    path: Optional[str] = Field(
+        default=None,
+        description="形状路径（SVG path data）"
+    )
+    viewBox: Optional[List[float]] = Field(
+        default=None,
+        description="形状视图框 [width, height]"
+    )
+
 
 class LayoutOptimizationRequest(BaseModel):
     """布局优化请求"""

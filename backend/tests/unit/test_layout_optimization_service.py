@@ -91,6 +91,169 @@ class TestLayoutOptimizationService:
         assert result[0].height == 100.0
 
     @pytest.mark.asyncio
+    async def test_optimize_layout_with_valid_new_elements(self, service):
+        """测试包含有效新元素ID的布局优化"""
+        elements = [
+            ElementData(
+                id="original1",
+                type="text",
+                left=100,
+                top=50,
+                width=600,
+                height=80,
+                content="原始文本"
+            )
+        ]
+
+        canvas_size = CanvasSize(width=1000, height=562.5)
+
+        # LLM创建了有效格式的新元素
+        optimized_html = """
+        <div class="ppt-canvas" style="width: 1000px; height: 562.5px; position: relative; background: white;">
+          <div class="ppt-element ppt-text" data-id="original1" data-type="text" style="position: absolute; left: 150px; top: 80px; width: 700px; height: 100px;">
+            原始文本
+          </div>
+          <div class="ppt-element ppt-shape" data-id="ABC123defg" data-type="shape" style="position: absolute; left: 50px; top: 200px; width: 100px; height: 80px; background: #FF0000;">
+            <div class="shape-text"></div>
+          </div>
+          <div class="ppt-element ppt-shape" data-id="XyZ987abCd" data-type="shape" style="position: absolute; left: 200px; top: 200px; width: 100px; height: 80px; background: #00FF00;">
+            <div class="shape-text"></div>
+          </div>
+        </div>
+        """
+
+        service.ai_client.ai_call.return_value = optimized_html
+
+        # 执行优化，应该成功
+        result = await service.optimize_layout(
+            slide_id="slide_001",
+            elements=elements,
+            canvas_size=canvas_size
+        )
+
+        # 验证结果：包含原始元素和2个新元素
+        assert len(result) == 3
+
+        # 验证原始元素
+        original_element = next(el for el in result if el.id == "original1")
+        assert original_element.type == "text"
+        assert original_element.content == "原始文本"
+
+        # 验证新元素
+        new_element_1 = next(el for el in result if el.id == "ABC123defg")
+        assert new_element_1.type == "shape"
+
+        new_element_2 = next(el for el in result if el.id == "XyZ987abCd")
+        assert new_element_2.type == "shape"
+
+    @pytest.mark.asyncio
+    async def test_optimize_layout_with_invalid_new_elements_raises_error(self, service):
+        """测试包含无效新元素ID的布局优化应该报错"""
+        elements = [
+            ElementData(
+                id="original1",
+                type="text",
+                left=100,
+                top=50,
+                width=600,
+                height=80,
+                content="原始文本"
+            )
+        ]
+
+        canvas_size = CanvasSize(width=1000, height=562.5)
+
+        # LLM创建了无效格式的新元素
+        optimized_html = """
+        <div class="ppt-canvas" style="width: 1000px; height: 562.5px; position: relative; background: white;">
+          <div class="ppt-element ppt-text" data-id="original1" data-type="text" style="position: absolute; left: 150px; top: 80px; width: 700px; height: 100px;">
+            原始文本
+          </div>
+          <div class="ppt-element ppt-shape" data-id="custom-bg-1" data-type="shape" style="position: absolute; left: 50px; top: 200px; width: 100px; height: 80px;">
+            <div class="shape-text"></div>
+          </div>
+          <div class="ppt-element ppt-shape" data-id="arrow-2" data-type="shape" style="position: absolute; left: 200px; top: 200px; width: 100px; height: 80px;">
+            <div class="shape-text"></div>
+          </div>
+        </div>
+        """
+
+        service.ai_client.ai_call.return_value = optimized_html
+
+        # 执行优化，应该抛出包含无效ID的错误
+        with pytest.raises(ValueError, match="布局优化出现无效元素ID") as exc_info:
+            await service.optimize_layout(
+                slide_id="slide_001",
+                elements=elements,
+                canvas_size=canvas_size
+            )
+
+        # 验证错误消息包含无效的ID
+        error_message = str(exc_info.value)
+        assert "custom-bg-1" in error_message
+        assert "arrow-2" in error_message
+        assert "nanoid(10)" in error_message
+
+    @pytest.mark.asyncio
+    async def test_validate_element_ids_edge_cases(self, service):
+        """测试元素ID验证的边缘情况"""
+        # 原始元素
+        original = [
+            ElementData(
+                id="valid123ID",
+                type="text",
+                left=100,
+                top=50,
+                width=200,
+                height=50,
+                content="测试"
+            )
+        ]
+
+        # 测试各种ID格式
+        test_cases = [
+            # (optimized_ids, should_pass, description)
+            (["valid123ID"], True, "只有原始元素"),
+            (["valid123ID", "ABC123defg"], True, "添加有效新元素ID"),
+            (["valid123ID", "1234567890"], True, "添加纯数字有效ID"),
+            (["valid123ID", "ABCDEFGHIJ"], True, "添加纯大写有效ID"),
+            (["valid123ID", "abcdefghij"], True, "添加纯小写有效ID"),
+            (["valid123ID", "invalid-id"], False, "无效ID：包含连字符"),
+            (["valid123ID", "short"], False, "无效ID：长度不足"),
+            (["valid123ID", "way_too_long_for_this_id"], False, "无效ID：长度过长"),
+            (["valid123ID", "ABC@123#def"], False, "无效ID：包含特殊字符"),
+        ]
+
+        for optimized_ids, should_pass, description in test_cases:
+            # 创建优化后的元素列表
+            optimized = []
+            for element_id in optimized_ids:
+                if element_id == "valid123ID":
+                    # 原始元素
+                    optimized.append(original[0])
+                else:
+                    # 新元素
+                    optimized.append(ElementData(
+                        id=element_id,
+                        type="shape",
+                        left=50,
+                        top=50,
+                        width=100,
+                        height=80
+                    ))
+
+            if should_pass:
+                # 应该不抛出异常
+                try:
+                    service._validate_optimized_elements(optimized, original, None)
+                except ValueError:
+                    pytest.fail(f"验证应该通过: {description}")
+            else:
+                # 应该抛出异常
+                with pytest.raises(ValueError, match="布局优化出现无效元素ID"):
+                    service._validate_optimized_elements(optimized, original, None)
+
+    @pytest.mark.asyncio
     async def test_optimize_layout_with_new_parameters(self, service):
         """测试带新参数的布局优化流程"""
         # 模拟元素
