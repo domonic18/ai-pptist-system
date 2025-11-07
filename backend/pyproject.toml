@@ -54,6 +54,13 @@ dependencies = [
     "cos-python-sdk-v5==1.9.27",
     "requests==2.31.0",
 
+    # 缓存和代理
+    "redis[hiredis]>=5.0.0",
+    "httpx>=0.25.0",
+
+    # 定时任务
+    "apscheduler>=3.10.0",
+
     # 工具和辅助库
     "markdown==3.8",
     "aiohttp>=3.8.0",

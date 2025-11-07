@@ -210,7 +210,7 @@ class ManagementHandler:
         image_id: str,
         user_id: str
     ) -> Dict[str, Any]:
-        """处理获取图片访问URL请求"""
+        """处理获取图片访问URL请求 - 集成缓存机制"""
         try:
             logger.info(
                 "处理获取图片访问URL",
@@ -220,6 +220,7 @@ class ManagementHandler:
                 }
             )
 
+            # 获取图片详情
             image_detail = await self.management_service.get_image_detail(image_id, user_id)
 
             if not image_detail:
@@ -228,19 +229,61 @@ class ManagementHandler:
                     detail="图片不存在"
                 )
 
-            # 返回包含URL的响应
-            result = {
-                "image_id": image_id,
-                "url": image_detail["url"],
-                "storage_type": "cos_presigned" if image_detail["cos_key"] else "direct"
-            }
+            # 如果有COS存储键，使用缓存服务获取URL
+            if image_detail.get("cos_key"):
+                try:
+                    from app.services.cache.image_url_service import get_image_url_service
 
-            logger.info(
-                "获取图片访问URL成功",
-                extra={
-                    "image_id": image_id
+                    service = await get_image_url_service()
+                    url, metadata = await service.get_image_url(
+                        image_key=image_detail["cos_key"],
+                        force_refresh=False,
+                        use_cache=True
+                    )
+
+                    result = {
+                        "image_id": image_id,
+                        "url": url,
+                        "storage_type": "cos_presigned_cached",
+                        "metadata": {
+                            "from_cache": metadata.get("from_cache", False),
+                            "cache_hit": metadata.get("from_cache", False),
+                            "expires_at": metadata.get("expires_at"),
+                            "response_time": metadata.get("response_time")
+                        }
+                    }
+
+                    logger.info(
+                        "使用缓存获取图片访问URL成功",
+                        extra={
+                            "image_id": image_id,
+                            "from_cache": metadata.get("from_cache", False)
+                        }
+                    )
+                except Exception as cache_error:
+                    # 缓存获取失败时降级到直接返回预签名URL
+                    logger.warning(
+                        f"缓存获取失败，使用原始URL: {str(cache_error)}",
+                        extra={
+                            "image_id": image_id,
+                            "error": str(cache_error)
+                        }
+                    )
+
+                    result = {
+                        "image_id": image_id,
+                        "url": image_detail["url"],
+                        "storage_type": "cos_presigned",
+                        "fallback": True,
+                        "error": str(cache_error)
+                    }
+            else:
+                # 没有COS存储键，直接返回URL
+                result = {
+                    "image_id": image_id,
+                    "url": image_detail["url"],
+                    "storage_type": "direct"
                 }
-            )
 
             return result
 
