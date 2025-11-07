@@ -36,6 +36,7 @@ backend/tests/
 │   ├── test_imports.py          # 模块导入测试
 │   ├── test_image_service.py    # 图片服务测试
 │   ├── test_cos_service.py      # COS存储服务测试
+│   ├── test_svg_elements.py     # SVG元素解析测试
 │   └── test_*.py                # 其他单元测试
 │
 ├── interface/                    # 接口集成测试
