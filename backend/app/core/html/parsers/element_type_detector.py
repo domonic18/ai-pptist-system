@@ -46,6 +46,8 @@ class ElementTypeDetector:
             return 'image'
         if tag_name in ['p', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
             return 'text'
+        if tag_name == 'svg':
+            return 'svg'
 
         # 优先级4：通过内容推断
         if element.get_text(strip=True):

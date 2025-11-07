@@ -124,6 +124,11 @@ class HTMLParser:
                             optimized = self._parse_shape_element(elem, style_dict, original)
                         else:
                             optimized = self._parse_new_shape_element(elem, style_dict, element_id)
+                    elif element_type == 'svg':
+                        if original:
+                            optimized = self._parse_svg_element(elem, style_dict, original)
+                        else:
+                            optimized = self._parse_new_svg_element(elem, style_dict, element_id)
                     elif element_type == 'image':
                         if original:
                             optimized = self._parse_image_element(elem, style_dict, original)
@@ -430,4 +435,169 @@ class HTMLParser:
         # 线条使用形状类型，但处理特殊样式
         optimized = self._parse_new_shape_element(elem, style_dict, element_id)
         optimized.type = 'line'
+        return optimized
+
+    def _parse_svg_element(
+        self,
+        elem,
+        style_dict: Dict[str, str],
+        original: ElementData
+    ) -> ElementData:
+        """解析SVG元素（保持原有逻辑）
+        提取SVG内部的path信息并转换为shape类型
+        """
+        # 提取viewBox属性 - 检查大小写
+        viewBox_attr = elem.get('viewBox', '') or elem.get('viewbox', '') or elem.get('viewBox'.lower(), '')
+        viewBox = None
+
+
+
+
+        if viewBox_attr:
+            try:
+                viewBox_parts = [float(x.strip()) for x in viewBox_attr.split()]
+                if len(viewBox_parts) == 4:
+                    # viewBox格式: [minX, minY, width, height]
+                    viewBox = [viewBox_parts[2], viewBox_parts[3]]
+            except (ValueError, AttributeError) as e:
+                pass
+
+        # 提取所有path元素的d属性
+        path_elems = elem.find_all('path')
+        path_d_list = []
+        for path_elem in path_elems:
+            d_attr = path_elem.get('d', '')
+            if d_attr:
+                path_d_list.append(d_attr)
+
+        # 使用提取的路径或原始路径
+        path_d = ''
+        if path_d_list:
+            if len(path_d_list) == 1:
+                path_d = path_d_list[0]
+            else:
+                # 多个路径时，使用第一个
+                path_d = path_d_list[0]
+                logger.debug(
+                    "发现多个SVG路径，仅使用第一个",
+                    operation="svg_multiple_paths",
+                    element_id=elem.get('data-id'),
+                    path_count=len(path_d_list)
+                )
+        else:
+            path_d = original.path
+
+        # 如果没有路径，使用默认矩形
+        if not path_d:
+            elem_width = parse_px_value(style_dict.get('width', ''), default=original.width or 40)
+            elem_height = parse_px_value(style_dict.get('height', ''), default=original.height or 40)
+            path_d = f'M 0 0 L {elem_width} 0 L {elem_width} {elem_height} L 0 {elem_height} Z'
+
+        # 确定最终使用的viewBox
+        if viewBox:
+            # 如果从SVG中提取到了viewBox，优先使用它
+            final_viewBox = viewBox
+        else:
+            # 如果没有从SVG提取到viewBox，使用元素尺寸
+            elem_width = parse_px_value(style_dict.get('width', ''), default=original.width or 40)
+            elem_height = parse_px_value(style_dict.get('height', ''), default=original.height or 40)
+            final_viewBox = [elem_width, elem_height]
+
+
+        optimized = ElementData(
+            id=elem.get('data-id'),
+            type='shape',  # 使用shape类型
+            # 位置和尺寸
+            left=parse_px_value(style_dict.get('left', '0'), default=original.left),
+            top=parse_px_value(style_dict.get('top', '0'), default=original.top),
+            width=parse_px_value(style_dict.get('width', ''), default=original.width),
+            height=parse_px_value(style_dict.get('height', ''), default=original.height),
+            rotate=parse_rotate_value(style_dict.get('transform', '')),
+            # SVG路径信息
+            viewBox=final_viewBox,
+            path=path_d or original.path,
+            fixedRatio=original.fixedRatio,
+            # 样式
+            fill=original.fill,
+            # 保持原始文本
+            text=original.text,
+        )
+
+        return optimized
+
+    def _parse_new_svg_element(
+        self,
+        elem,
+        style_dict: Dict[str, str],
+        element_id: str
+    ) -> ElementData:
+        """解析新创建的SVG元素
+        提取SVG内部的path信息并转换为shape类型，以便前端复用shape渲染逻辑
+        """
+        # 提取viewBox属性 - 检查大小写
+        viewBox_attr = elem.get('viewBox', '') or elem.get('viewbox', '') or elem.get('viewBox'.lower(), '')
+        viewBox = None
+        if viewBox_attr:
+            try:
+                viewBox_parts = [float(x.strip()) for x in viewBox_attr.split()]
+                if len(viewBox_parts) == 4:
+                    # viewBox格式: [minX, minY, width, height]
+                    viewBox = [viewBox_parts[2], viewBox_parts[3]]
+            except (ValueError, AttributeError):
+                pass
+
+        # 提取所有path元素的d属性，并合并为一个复杂的路径
+        path_elems = elem.find_all('path')
+        path_d_list = []
+        for path_elem in path_elems:
+            d_attr = path_elem.get('d', '')
+            if d_attr:
+                path_d_list.append(d_attr)
+
+        # 合并所有路径，如果只有一个路径则直接使用，否则需要特殊处理
+        # 注意：多个path可能需要用<g>标签分组，这里简化处理
+        path_d = ''
+        if path_d_list:
+            # 如果有多个path，尝试合并（简化处理）
+            if len(path_d_list) == 1:
+                path_d = path_d_list[0]
+            else:
+                # 多个路径时，组合成一个组（实际渲染时前端需要支持多path）
+                # 这里先使用第一个路径，后续可以优化
+                path_d = path_d_list[0]
+                logger.debug(
+                    "发现多个SVG路径，仅使用第一个",
+                    operation="svg_multiple_paths",
+                    element_id=element_id,
+                    path_count=len(path_d_list)
+                )
+
+        # 解析尺寸
+        width = parse_px_value(style_dict.get('width', '40'))
+        height = parse_px_value(style_dict.get('height', '40'))
+
+        # 如果没有路径，使用默认矩形
+        if not path_d:
+            path_d = f'M 0 0 L {width} 0 L {width} {height} L 0 {height} Z'
+
+        # 使用shape类型，让前端能复用现有的shape渲染逻辑
+        optimized = ElementData(
+            id=element_id,
+            type='shape',  # 使用shape类型而不是svg类型
+            # 位置和尺寸
+            left=parse_px_value(style_dict.get('left', '100')),
+            top=parse_px_value(style_dict.get('top', '100')),
+            width=width,
+            height=height,
+            rotate=parse_rotate_value(style_dict.get('transform', '')),
+            # SVG路径信息保存在path和viewBox中
+            viewBox=viewBox or [width, height],
+            path=path_d or f'M 0 0 L {width} 0 L {width} {height} L 0 {height} Z',
+            fixedRatio=False,
+            # 样式
+            fill='#ffffff',
+            # 空文本
+            text={"content": ""},
+        )
+
         return optimized
