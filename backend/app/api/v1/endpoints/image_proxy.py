@@ -21,7 +21,7 @@ router = APIRouter(tags=["Image Proxy"])
 
 
 @router.get(
-    "/{image_key}/proxy",
+    "/{image_key:path}",
     summary="图片代理访问",
     description="通过代理模式或重定向模式访问图片，支持缓存加速"
 )
@@ -165,7 +165,7 @@ async def _proxy_image_content(url: str, image_key: str, response_time: float):
 
 
 @router.get(
-    "/{image_key}/status",
+    "/status/{image_key:path}",
     response_model=StandardResponse,
     summary="获取图片状态",
     description="检查图片URL状态、过期时间和缓存信息"
@@ -208,7 +208,7 @@ async def get_image_status(
 
 
 @router.post(
-    "/{image_key}/refresh",
+    "/refresh/{image_key:path}",
     response_model=StandardResponse,
     summary="刷新图片URL",
     description="强制刷新图片的预签名URL，清除旧缓存"

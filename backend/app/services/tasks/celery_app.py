@@ -38,6 +38,7 @@ celery_app.conf.update(
         "app.services.tasks.refresh_tasks.refresh_url_cache": {"queue": "quick"},
         "app.services.tasks.refresh_tasks.batch_refresh_url_cache": {"queue": "batch"},
         "app.services.tasks.refresh_tasks.cleanup_expired_cache": {"queue": "maintenance"},
+        "app.services.tasks.refresh_tasks.pre_refresh_active_urls": {"queue": "maintenance"},
     },
 
     # 队列配置

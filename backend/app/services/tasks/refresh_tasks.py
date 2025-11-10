@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(
-    name="refresh_url_cache",
     bind=True,
     autoretry_for=(Exception,),
     retry_kwargs={"max_retries": 3, "countdown": 60},
@@ -66,7 +65,6 @@ def refresh_url_cache(self, image_key: str, force_refresh: bool = False) -> dict
 
 
 @celery_app.task(
-    name="batch_refresh_url_cache",
     bind=True,
     max_retries=3,
 )
@@ -143,7 +141,7 @@ def batch_refresh_url_cache(
         raise self.retry(exc=e)
 
 
-@celery_app.task(name="schedule_periodic_refresh")
+@celery_app.task()
 def schedule_periodic_refresh(image_key: str, refresh_interval: int = 3600) -> str:  # type: ignore
     """安排定期刷新任务
 
@@ -168,7 +166,7 @@ def schedule_periodic_refresh(image_key: str, refresh_interval: int = 3600) -> s
     return task.id
 
 
-@celery_app.task(name="cleanup_expired_cache")
+@celery_app.task()
 def cleanup_expired_cache() -> dict:  # type: ignore
     """清理过期缓存
 
@@ -209,7 +207,7 @@ def cleanup_expired_cache() -> dict:  # type: ignore
         }
 
 
-@celery_app.task(name="pre_refresh_active_urls")
+@celery_app.task()
 def pre_refresh_active_urls() -> dict:  # type: ignore
     """预刷新活跃URL
 

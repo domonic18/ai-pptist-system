@@ -22,7 +22,9 @@ api_router.include_router(image_manager.router, prefix="/images", tags=["图片�
 api_router.include_router(image_tags.router, prefix="/images", tags=["图片标签"])
 api_router.include_router(image_upload.router, prefix="/images/upload", tags=["图片上传"])
 api_router.include_router(image_search.router, prefix="/images/search", tags=["图片搜索"])
-api_router.include_router(image_proxy.router, prefix="/images", tags=["图片代理"])
+# image_proxy使用完全不同的前缀，彻底避免与image_manager路由冲突
+# 避免使用/images前缀下的任何路径
+api_router.include_router(image_proxy.router, prefix="/img-access", tags=["图片代理"])
 api_router.include_router(tags.router, prefix="/tags", tags=["标签管理"])
 api_router.include_router(ai_model.router, prefix="/ai-models", tags=["AI Models"])
 api_router.include_router(generation.router, prefix="/generate", tags=["AI Generation"])

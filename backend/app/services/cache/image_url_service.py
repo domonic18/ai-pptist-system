@@ -81,10 +81,10 @@ class ImageURLService:
         start_time = time.time()
 
         try:
-            # 1. 尝试从缓存获取
+            # 1. 尝试从缓存获取（检查是否过期）
             if use_cache and not force_refresh:
                 cached_entry = await self.url_cache.get(image_key)
-                if cached_entry:
+                if cached_entry and not cached_entry.is_expired():
                     self.performance_stats['cache_hits'] += 1
                     response_time = time.time() - start_time
                     self._update_response_time(response_time)
@@ -94,13 +94,23 @@ class ImageURLService:
                         extra={
                             'image_key': image_key,
                             'response_time': response_time,
-                            'cache_hit': True
+                            'cache_hit': True,
+                            'is_expired': False
                         }
                     )
 
                     return cached_entry.url, self._build_metadata(cached_entry, from_cache=True)
-
-            # 2. 缓存未命中或强制刷新，调用COS生成新URL
+                elif cached_entry and cached_entry.is_expired():
+                    # 缓存存在但已过期，记录日志并继续获取新URL
+                    logger.warning(
+                        f"缓存命中但已过期: {image_key}，将重新生成URL",
+                        extra={
+                            'image_key': image_key,
+                            'expired_at': cached_entry.expires_at,
+                            'current_time': time.time()
+                        }
+                    )
+            # 2. 缓存未命中/过期或强制刷新，调用COS生成新URL
             logger.info(f"缓存未命中，调用COS生成新URL: {image_key}")
             self.performance_stats['cos_calls'] += 1
 
