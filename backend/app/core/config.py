@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     cos_encryption_algorithm: str = "AES256"
     cos_encryption_key_id: Optional[str] = None
 
-    cos_url_expires: int = 86400
+    cos_url_expires: int = 3600
     cos_url_cache_size: int = 1000
     cos_url_cache_ttl: int = 3600
 

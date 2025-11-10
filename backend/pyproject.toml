@@ -58,8 +58,9 @@ dependencies = [
     "redis[hiredis]>=5.0.0",
     "httpx>=0.25.0",
 
-    # 定时任务
-    "apscheduler>=3.10.0",
+    # 任务队列
+    "celery>=5.3.0",
+    "redis>=5.0.0",
 
     # 工具和辅助库
     "markdown==3.8",

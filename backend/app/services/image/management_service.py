@@ -166,21 +166,60 @@ class ManagementService:
             raise
 
     async def _generate_access_url(self, image) -> str:
-        """为图片生成访问URL"""
+        """为图片生成访问URL - 集成Redis缓存"""
         try:
             if image.cos_key:
-                # 使用预签名URL访问COS文件
-                return await self.storage_service.generate_url(
-                    image.cos_key, settings.cos_url_expires, "get"
-                )
+                # 使用带缓存的图片URL服务，优先从Redis缓存获取
+                try:
+                    from app.services.cache.image_url_service import get_image_url_service
+
+                    service = await get_image_url_service()
+                    url, metadata = await service.get_image_url(
+                        image_key=image.cos_key,
+                        force_refresh=False,
+                        use_cache=True
+                    )
+
+                    # 记录缓存命中情况
+                    if metadata.get("from_cache", False):
+                        logger.debug(
+                            "从Redis缓存获取图片URL",
+                            extra={
+                                "image_id": image.id,
+                                "cos_key": image.cos_key
+                            }
+                        )
+
+                    return url
+
+                except Exception as cache_error:
+                    # 缓存失败时降级到直接调用COS API
+                    logger.warning(
+                        f"缓存服务失败，降级到直接生成URL: {str(cache_error)}",
+                        extra={
+                            "image_id": image.id,
+                            "cos_key": image.cos_key,
+                            "error": str(cache_error)
+                        }
+                    )
+
+                    # 降级到直接调用COS API
+                    return await self.storage_service.generate_url(
+                        image.cos_key, settings.cos_url_expires, "get"
+                    )
+
             elif image.image_url:
-                # 使用直接URL
+                # 使用直接URL（通常是外部URL，不需要缓存）
                 return image.image_url
             else:
                 # 没有可用的URL
                 return ""
+
         except Exception as e:
-            logger.error(f"生成访问URL失败: {e}")
+            logger.error(
+                f"生成访问URL失败: {e}",
+                extra={"image_id": getattr(image, "id", "unknown")}
+            )
             return ""
 
     async def get_image_generation_history(

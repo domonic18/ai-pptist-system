@@ -43,5 +43,58 @@
       },
       "envFile": "${workspaceFolder}/config/.env.local"
   },
+  {
+    "name": "Celery: 启动Worker进程",
+    "type": "debugpy",
+    "request": "launch",
+    "module": "celery",
+    "args": [
+        "-A",
+        "app.services.tasks.celery_app",
+        "worker",
+        "--loglevel=info",
+        "--concurrency=4",
+        "--queues=default,quick,batch,maintenance"
+    ],
+    "cwd": "${workspaceFolder}/backend",
+    "console": "integratedTerminal",
+    "justMyCode": false,
+    "env": {
+        "PYTHONPATH": "${workspaceFolder}/backend"
+    },
+    "envFile": "${workspaceFolder}/config/.env.local"
+  },
+  {
+    "name": "Celery: 启动Beat调度器",
+    "type": "debugpy",
+    "request": "launch",
+    "module": "celery",
+    "args": [
+        "-A",
+        "app.services.tasks.celery_app",
+        "beat",
+        "--loglevel=info",
+        "--schedule=celerybeat-schedule"
+    ],
+    "cwd": "${workspaceFolder}/backend",
+    "console": "integratedTerminal",
+    "justMyCode": false,
+    "env": {
+        "PYTHONPATH": "${workspaceFolder}/backend"
+    },
+    "envFile": "${workspaceFolder}/config/.env.local"
+  }
+  ],
+  "compounds": [
+    {
+      "name": "Python: 启动完整后端服务",
+      "configurations": [
+        "Python: 启动FastAPI服务",
+        "Celery: 启动Worker进程",
+        "Celery: 启动Beat调度器"
+      ],
+      "preLaunchTask": "${defaultBuildTask}",
+      "stopAll": true
+    }
   ]
 }
