@@ -64,12 +64,28 @@ class LayoutOptimizationService:
             ValueError: 验证失败
             Exception: 其他异常
         """
+        # 记录优化开始时的完整信息
         logger.info(
-            "开始执行布局优化",
-            operation="optimize_layout",
+            "==== 布局优化开始 ====",
+            operation="optimize_layout_start",
             slide_id=slide_id,
-            elements_count=len(elements)
+            elements_count=len(elements),
+            element_ids=[el.id for el in elements],
+            element_types=[el.type for el in elements]
         )
+
+        # 详细记录每个原始元素的信息
+        for idx, element in enumerate(elements):
+            logger.debug(
+                f"原始元素 {idx + 1}/{len(elements)} 详情",
+                operation="original_element_detail",
+                element_id=element.id,
+                element_type=element.type,
+                element_left=element.left,
+                element_top=element.top,
+                element_width=element.width,
+                element_height=element.height
+            )
 
         try:
             # 1. 转换PPTist元素为HTML
@@ -142,11 +158,68 @@ class LayoutOptimizationService:
                 optimized_html, elements
             )
 
+            logger.info(
+                "解析LLM返回的HTML元素完成",
+                operation="parse_llm_elements_complete",
+                llm_elements_count=len(optimized_elements),
+                llm_element_ids=[el.id for el in optimized_elements],
+                llm_element_types=[el.type for el in optimized_elements]
+            )
+
             # 6.5. 清洗元素数据，移除null/undefined值
             cleaned_elements = self._sanitize_elements_data(optimized_elements)
 
+            logger.info(
+                "清洗元素数据完成",
+                operation="sanitize_elements_complete",
+                cleaned_elements_count=len(cleaned_elements),
+                cleaned_element_ids=[el.id for el in cleaned_elements],
+                removed_null_fields="(see previous debug logs)"
+            )
+
             # 7. 验证结果（确保内容不变、ID一致等）
             self._validate_optimized_elements(cleaned_elements, elements, user_prompt)
+
+            # 生成优化总结报告
+            original_ids = {el.id for el in elements}
+            optimized_ids = {el.id for el in cleaned_elements}
+            missing = original_ids - optimized_ids
+            extra = optimized_ids - original_ids
+
+            logger.info(
+                "==== 布局优化完成总结报告 ====",
+                operation="optimize_layout_complete_summary",
+                slide_id=slide_id,
+                summary={
+                    "原始元素数量": len(elements),
+                    "优化后元素数量": len(cleaned_elements),
+                    "变化情况": {
+                        "保留元素数量": len(optimized_ids) - len(extra),
+                        "新增元素数量": len(extra),
+                        "删除元素数量": len(missing)
+                    },
+                    "删除元素ID列表": sorted(list(missing)) if missing else [],
+                    "新增元素ID列表": sorted(list(extra)) if extra else [],
+                    "保留元素ID列表": sorted(list(original_ids & optimized_ids))
+                },
+                detailed_breakdown={
+                    "原始元素": {
+                        "total": len(elements),
+                        "ids": sorted([el.id for el in elements]),
+                        "types": {}
+                    },
+                    "优化后元素": {
+                        "total": len(cleaned_elements),
+                        "ids": sorted([el.id for el in cleaned_elements]),
+                        "types": {}
+                    },
+                    "操作": {
+                        "删除": f"{len(missing)} 个元素",
+                        "新增": f"{len(extra)} 个新装饰元素",
+                        "保留": f"{len(optimized_ids) - len(extra)} 个原始元素"
+                    }
+                }
+            )
 
             logger.info(
                 "布局优化执行成功",
@@ -158,6 +231,32 @@ class LayoutOptimizationService:
             return cleaned_elements
 
         except Exception as e:
+            import traceback
+
+            # 生成错误发生时的总结报告
+            logger.error(
+                "==== 布局优化失败总结报告 ====",
+                operation="optimize_layout_failed_summary",
+                slide_id=slide_id,
+                failure_summary={
+                    "失败阶段": "捕获到异常前的最后操作阶段",
+                    "错误类型": type(e).__name__,
+                    "错误消息": str(e),
+                    "堆栈追踪": traceback.format_exc(),
+                    "原始元素统计": {
+                        "总数": len(elements) if 'elements' in locals() else 0,
+                        "类型分布": self._count_element_types(elements) if 'elements' in locals() else {}
+                    },
+                    "处理进度": {
+                        "HTML转换完成": 'html_content' in locals(),
+                        "提示词准备完成": 'user_prompt_params' in locals(),
+                        "LLM调用开始": 'llm_response' in locals(),
+                        "HTML解析完成": 'optimized_elements' in locals(),
+                        "数据清洗完成": 'cleaned_elements' in locals()
+                    }
+                }
+            )
+
             logger.error(
                 "布局优化执行失败",
                 operation="optimize_layout_failed",
@@ -215,12 +314,28 @@ class LayoutOptimizationService:
         extra = optimized_ids - original_ids
 
         if missing:
-            # 允许LLM删除元素，但记录警告信息
+            # 允许LLM删除元素，但记录详细警告信息
+            removed_elements_detail = []
+            for element_id in missing:
+                original_element = next((el for el in original if el.id == element_id), None)
+                if original_element:
+                    removed_elements_detail.append({
+                        "id": element_id,
+                        "type": original_element.type,
+                        "has_content": bool(getattr(original_element, 'content', '')),
+                        "content_preview": getattr(original_element, 'content', '')[:100] if getattr(original_element, 'content', '') else "",
+                        "left": getattr(original_element, 'left', 0),
+                        "top": getattr(original_element, 'top', 0),
+                        "width": getattr(original_element, 'width', 0),
+                        "height": getattr(original_element, 'height', 0)
+                    })
+
             logger.warning(
                 "布局优化中删除了部分元素",
                 operation="layout_optimization_removed_elements",
-                removed_elements=sorted(list(missing)),
-                removed_count=len(missing)
+                removed_count=len(missing),
+                removed_elements_detail=removed_elements_detail,
+                reason="这些元素在LLM返回的HTML中未找到，可能是LLM主动删除或元素转换失败"
             )
 
             # 检查删除的元素是否包含重要内容
@@ -234,7 +349,12 @@ class LayoutOptimizationService:
                     "布局优化中删除了文本元素",
                     operation="layout_optimization_removed_text",
                     removed_text_elements=[
-                        {"id": el.id, "content": el.content[:50]}
+                        {
+                            "id": el.id,
+                            "type": el.type,
+                            "content_length": len(el.content) if el.content else 0,
+                            "content_preview": el.content[:100] if el.content else ""
+                        }
                         for el in removed_text_elements
                     ]
                 )
@@ -249,9 +369,9 @@ class LayoutOptimizationService:
 
             for element_id in extra:
                 # 严格验证：ID必须符合nanoid(10)格式
-                if (element_id and
-                    len(element_id) == 10 and
-                    all(char in id_generator.ALPHABET for char in element_id)):
+                is_valid = id_generator.is_valid_id(element_id)
+
+                if is_valid:
                     valid_new_ids.append(element_id)
                     logger.info(
                         "发现新元素ID",
@@ -260,10 +380,26 @@ class LayoutOptimizationService:
                     )
                 else:
                     invalid_new_ids.append(element_id)
+                    # 提供详细的验证失败信息
+                    validation_details = {
+                        "element_id": element_id,
+                        "length": len(element_id) if element_id else 0,
+                        "expected_length": id_generator.ELEMENT_ID_LENGTH,
+                        "is_none_or_empty": element_id is None or (element_id and len(element_id) == 0),
+                        "has_invalid_chars": False
+                    }
+
+                    if element_id:
+                        invalid_chars = [char for char in element_id if char not in id_generator.ALPHABET]
+                        if invalid_chars:
+                            validation_details["has_invalid_chars"] = True
+                            validation_details["invalid_chars"] = invalid_chars
+                            validation_details["invalid_char_codes"] = [ord(char) for char in invalid_chars]
+
                     logger.warning(
                         "发现无效的新元素ID",
                         operation="invalid_new_element_id",
-                        element_id=element_id
+                        **validation_details
                     )
 
             # 只有存在无效ID时才报错
@@ -397,6 +533,14 @@ class LayoutOptimizationService:
                         original_content=orig_el.content[:50],
                         optimized_content=opt_el.content[:50]
                     )
+
+    def _count_element_types(self, elements: List[ElementData]) -> dict:
+        """统计元素类型分布"""
+        type_counts = {}
+        for element in elements:
+            type_name = element.type or 'unknown'
+            type_counts[type_name] = type_counts.get(type_name, 0) + 1
+        return type_counts
 
     def _sanitize_elements_data(self, elements: List[ElementData]) -> List[ElementData]:
         """

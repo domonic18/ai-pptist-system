@@ -85,7 +85,6 @@ class HTMLParser:
             )
 
             optimized_elements = []
-            next_new_id_counter = 1000
 
             for elem in ppt_elements:
                 element_id = elem.get('data-id')
@@ -95,10 +94,15 @@ class HTMLParser:
                 if not element_type:
                     element_type = self.type_detector.detect_type(elem)
 
-                # 如果没有ID，生成新ID
+                # 如果没有ID，生成符合nanoid(10)规范的新ID
                 if not element_id:
-                    element_id = f"generated_{next_new_id_counter}"
-                    next_new_id_counter += 1
+                    element_id = self.id_generator.generate_id()
+                    logger.info(
+                        "为无ID元素自动生成新ID",
+                        operation="generate_new_id",
+                        element_id=element_id,
+                        element_type=element_type
+                    )
 
                 # 查找原始元素
                 original = original_map.get(element_id)
