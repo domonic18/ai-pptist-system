@@ -43,7 +43,7 @@ class ManagementService:
                     "description": image.description,
                     "tags": image.tags,
                     "created_at": image.created_at,
-                    "url": await self._generate_access_url(image),
+                    "url": image.cos_key,  # 返回cos_key，让前端通过代理访问
                     "source_type": image.source_type,
                     "model_name": image.generation_model,
                     "cos_key": image.cos_key,
@@ -85,7 +85,7 @@ class ManagementService:
                 "description": image.description,
                 "tags": image.tags,
                 "created_at": image.created_at,
-                "url": await self._generate_access_url(image),
+                "url": image.cos_key,  # 返回cos_key，让前端通过代理访问
                 "cos_key": image.cos_key,
                 "storage_status": image.storage_status,
                 "source_type": image.source_type,

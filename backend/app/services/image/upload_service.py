@@ -208,14 +208,8 @@ class ImageUploadService:
 
     def _validate_file_type(self, content_type: str) -> bool:
         """验证文件类型是否为支持的图片格式"""
-        supported_types = [
-            "image/jpeg",
-            "image/png",
-            "image/gif",
-            "image/webp",
-            "image/svg+xml"
-        ]
-        return content_type in supported_types
+        from app.core.config import settings
+        return content_type in settings.supported_image_mime_types
 
     def _generate_storage_key(self, filename: str, user_id: str) -> str:
         """生成存储对象键"""

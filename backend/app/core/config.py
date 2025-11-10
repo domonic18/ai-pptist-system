@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     max_image_size: int = 10485760   # 10MB
 
     allowed_extensions: str = "jpg,jpeg,png,gif,pdf,doc,docx,txt,ppt,pptx"
-    image_formats: str = "jpg,jpeg,png,gif,bmp,webp"
+    image_formats: str = "jpg,jpeg,png,gif,bmp,webp,tiff,tif"
 
     # ==================== COS存储配置 ====================
     cos_secret_id: str = ""
@@ -242,6 +242,21 @@ class Settings(BaseSettings):
     def cos_enabled(self) -> bool:
         """检查COS是否启用"""
         return bool(self.cos_secret_id and self.cos_secret_key and self.cos_bucket)
+
+    @property
+    def supported_image_mime_types(self) -> List[str]:
+        """获取支持的图片MIME类型列表"""
+        mime_type_map = {
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "png": "image/png",
+            "gif": "image/gif",
+            "bmp": "image/bmp",
+            "webp": "image/webp",
+            "tiff": "image/tiff",
+            "tif": "image/tiff"
+        }
+        return [mime_type_map[fmt] for fmt in self.image_formats if fmt in mime_type_map]
 
     @property
     def absolute_log_file(self) -> str:

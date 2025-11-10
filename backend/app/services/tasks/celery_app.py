@@ -1,14 +1,17 @@
 """Celery应用配置"""
 
 import os
+from pathlib import Path
 from celery import Celery
 from kombu import Queue
+from app.core.config import settings
 
 # 创建Celery应用
+# 使用不同的Redis数据库索引：db 0 for broker, db 1 for result backend
 celery_app = Celery(
     "ai_pptist_tasks",
     broker=os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0"),
-    backend=os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0"),
+    backend=os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1"),
     include=[
         "app.services.tasks.refresh_tasks",
     ],
@@ -63,7 +66,8 @@ celery_app.conf.update(
             "options": {"queue": "maintenance"},
         },
     },
-    beat_schedule_filename="celerybeat-schedule",
+    # 将celerybeat-schedule文件存储在workspace目录
+    beat_schedule_filename=str(Path(settings.workspace_dir) / "celerybeat-schedule"),
 )
 
 

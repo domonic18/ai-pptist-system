@@ -174,13 +174,20 @@ def cleanup_expired_cache() -> dict:  # type: ignore
         清理结果统计
     """
     try:
+        import asyncio
         from app.services.cache.url_cache import ImageURLCache
+
+        # 在Celery中运行异步函数
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
         cache = ImageURLCache()
         start_time = datetime.utcnow()
 
         # 清理过期缓存
-        cleaned_count = cache.cleanup_expired()
+        cleaned_count = loop.run_until_complete(cache.cleanup_expired())
+
+        loop.close()
 
         duration = (datetime.utcnow() - start_time).total_seconds()
 
