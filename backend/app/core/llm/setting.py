@@ -11,6 +11,7 @@ class ModelSetting:
     """AI模型设置类"""
 
     def __init__(self, config_dict: Dict[str, Any]):
+        self.id = config_dict.get("id", "")
         self.name = config_dict.get("name", "")
         self.ai_model_name = config_dict.get("ai_model_name", self.name)  # 默认为name
         self.api_key = config_dict.get("api_key", "")
@@ -33,6 +34,9 @@ class ModelSetting:
 
         # 默认模型标记
         self.is_default = config_dict.get("is_default", False)
+
+        # 模型能力
+        self.supports_vision = config_dict.get("supports_vision", False)
 
     def get_client(self) -> openai.AsyncOpenAI:
         """获取异步OpenAI客户端"""

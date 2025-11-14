@@ -91,6 +91,7 @@ class ModelManager:
     def _db_to_setting(db_model) -> ModelSetting:
         """数据库模型到配置对象的转换"""
         cfg_dict = {
+            "id": db_model.id,
             "name": db_model.name,
             "ai_model_name": db_model.ai_model_name,
             "api_key": db_model.api_key or "",
@@ -100,7 +101,8 @@ class ModelManager:
             "description": "",
             "temperature": 0.7,
             "max_tokens": 1000,
-            "is_default": db_model.is_default
+            "is_default": db_model.is_default,
+            "supports_vision": db_model.supports_vision
         }
 
         return ModelSetting(cfg_dict)

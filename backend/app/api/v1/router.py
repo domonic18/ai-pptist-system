@@ -12,7 +12,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     image_manager, image_upload, image_search, ai_model, generation,
-    image_tags, tags, layout_optimization, image_proxy, tasks
+    image_tags, tags, layout_optimization, image_proxy, tasks, annotation
 )
 
 api_router = APIRouter()
@@ -30,3 +30,4 @@ api_router.include_router(ai_model.router, prefix="/ai-models", tags=["AI Models
 api_router.include_router(generation.router, prefix="/generate", tags=["AI Generation"])
 api_router.include_router(layout_optimization.router, prefix="/layout", tags=["布局优化"])
 api_router.include_router(tasks.router, prefix="/tasks", tags=["任务管理"])
+api_router.include_router(annotation.router, prefix="/annotation", tags=["自动标注"])
