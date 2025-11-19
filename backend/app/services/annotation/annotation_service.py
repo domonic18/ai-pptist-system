@@ -200,7 +200,7 @@ class AnnotationService:
                     raise ValueError("没有找到可用的视觉模型")
 
             # 使用提示词模板系统生成分析提示词
-            _, user_prompt, temperature, max_tokens = self.prompt_helper.prepare_prompts(
+            system_prompt, user_prompt, temperature, max_tokens = self.prompt_helper.prepare_prompts(
                 category="annotation",
                 template_name="slide_analysis",
                 user_prompt_params={"slide_data": slide}
@@ -212,7 +212,8 @@ class AnnotationService:
                 prompt=user_prompt,
                 model_config={"model_id": model_id},
                 max_tokens=max_tokens,
-                temperature=temperature
+                temperature=temperature,
+                system_prompt=system_prompt
             )
 
             # 确保结果包含必要字段
