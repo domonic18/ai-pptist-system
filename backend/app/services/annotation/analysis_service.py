@@ -85,8 +85,13 @@ class AnalysisService:
         """
         调用多模态分析
 
+        最佳实践说明：
+        - 图片通过多模态接口的 image_url 参数单独传递
+        - 提示词中只包含文本描述，不包含图片的 base64 数据
+        - 这样可以避免图片数据重复，减少 token 消耗
+
         Args:
-            slide: 幻灯片数据
+            slide: 幻灯片数据（包含 screenshot, elements 等字段）
             model_config: 模型配置
 
         Returns:
@@ -112,16 +117,23 @@ class AnalysisService:
             else:
                 raise ValueError("没有找到可用的视觉模型")
 
+        # 准备不包含截图的幻灯片数据用于提示词
+        # 按照多模态最佳实践，图片应通过专用接口传递，不应包含在提示词文本中
+        screenshot_data = slide.get("screenshot")
+        slide_data_for_prompt = {k: v for k, v in slide.items() if k != "screenshot"}
+
         # 使用提示词模板系统生成分析提示词
+        # 提示词中只包含幻灯片的元数据（elements, slide_id等），不包含图片数据
         system_prompt, user_prompt, temperature, max_tokens = self.prompt_helper.prepare_prompts(
             category="annotation",
             template_name="slide_analysis",
-            user_prompt_params={"slide_data": slide}
+            user_prompt_params={"slide_data": slide_data_for_prompt}
         )
 
         # 使用多模态客户端分析图片
+        # 图片通过 image_data 参数单独传递，符合多模态接口规范
         result = await self.multimodal_client.analyze_image(
-            image_data=slide.get("screenshot", ""),
+            image_data=screenshot_data or "",
             prompt=user_prompt,
             model_config={"model_id": model_id},
             max_tokens=max_tokens,
