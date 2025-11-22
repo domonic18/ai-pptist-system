@@ -58,7 +58,8 @@ class ModelManager:
                     if model.is_default and model.is_enabled and not default_text_model:
                         default_text_model = cfg
 
-                if model.supports_image_generation:
+                # 图像生成模型和视觉模型都归类到image_models
+                if model.supports_image_generation or model.supports_vision:
                     image_models.append(cfg)
                     if model.is_default and model.is_enabled and not default_image_model:
                         default_image_model = cfg
