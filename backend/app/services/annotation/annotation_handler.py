@@ -179,9 +179,11 @@ class AnnotationHandler:
         if not request.slide.get("slide_id"):
             raise ValueError("幻灯片ID不能为空")
 
-        # 验证 model_id
-        if not request.model_id or not request.model_id.strip():
+        # 验证 model_id - 允许空字符串，后端会自动选择模型
+        # model_id 是可选的，如果为空，后端会自动选择可用的视觉模型
+        if request.model_id is None:
             raise ValueError("模型ID不能为空")
+        # 注意：这里允许空字符串，因为前端可能发送空字符串让后端自动选择模型
 
     def _validate_batch_annotation_request(self, request: BatchAnnotationRequest):
         """验证批量标注请求"""
@@ -196,6 +198,8 @@ class AnnotationHandler:
             if not slide.get("slide_id"):
                 raise ValueError("幻灯片ID不能为空")
 
-        # 验证 model_id
-        if not request.model_id or not request.model_id.strip():
+        # 验证 model_id - 允许空字符串，后端会自动选择模型
+        # model_id 是可选的，如果为空，后端会自动选择可用的视觉模型
+        if request.model_id is None:
             raise ValueError("模型ID不能为空")
+        # 注意：这里允许空字符串，因为前端可能发送空字符串让后端自动选择模型

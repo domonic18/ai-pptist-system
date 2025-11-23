@@ -125,32 +125,41 @@ class MultimodalClient:
 
     async def _resolve_model_config(self, model_config: Dict[str, Any]) -> Optional[ModelSetting]:
         """解析模型配置"""
-        if model_config.get("model_id"):
-            model_id = model_config["model_id"]
+        # 确保模型管理器已加载
+        await self.model_manager.ensure_loaded()
 
-            # 确保模型管理器已加载
-            await self.model_manager.ensure_loaded()
+        # 查找所有支持视觉的模型
+        vision_models = [
+            model for model in self.model_manager.text_models + self.model_manager.image_models
+            if getattr(model, 'supports_vision', False) and model.enabled
+        ]
 
-            # 查找支持视觉的模型
-            vision_models = [
-                model for model in self.model_manager.text_models + self.model_manager.image_models
-                if getattr(model, 'supports_vision', False) and model.enabled
-            ]
+        if not vision_models:
+            logger.warning("系统中没有配置可用的视觉模型")
+            return None
 
-            if not vision_models:
-                logger.warning(f"没有找到可用的视觉模型，请求模型ID: {model_id}")
-                return None
-
-            # 查找指定模型
+        # 如果指定了模型ID，尝试查找指定模型
+        model_id = model_config.get("model_id")
+        if model_id:
             found_model = next((model for model in vision_models if model.id == model_id), None)
 
-            if not found_model:
-                logger.warning(f"未找到指定的视觉模型: {model_id}")
-                return None
+            if found_model:
+                logger.info(f"使用指定的视觉模型: {found_model.name} (ID: {found_model.id})")
+                return found_model
+            else:
+                logger.warning(f"未找到指定的视觉模型: {model_id}，将自动选择可用模型")
 
-            logger.info(f"使用视觉模型: {found_model.name} (ID: {found_model.id})")
-            return found_model
-        return None
+        # 如果没有指定模型ID，或者指定的模型不存在，自动选择一个可用模型
+        # 优先选择标记为默认的模型
+        default_model = next((model for model in vision_models if getattr(model, 'is_default', False)), None)
+        if default_model:
+            logger.info(f"自动选择默认视觉模型: {default_model.name} (ID: {default_model.id})")
+            return default_model
+
+        # 如果没有默认模型，选择第一个可用的
+        first_model = vision_models[0]
+        logger.info(f"自动选择第一个可用视觉模型: {first_model.name} (ID: {first_model.id})")
+        return first_model
 
     def _process_image_data(self, image_data: str) -> str:
         """
