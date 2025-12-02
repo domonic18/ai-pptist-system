@@ -523,3 +523,176 @@ class TestHTMLParser:
         assert new_element.rotate == 15.0
         assert new_element.fill == "#ff6b6b"
 
+    @pytest.mark.asyncio
+    async def test_svg_color_extraction_from_path_fill(self):
+        """测试从SVG path的fill属性提取颜色（解决白色SVG问题）"""
+        # LLM返回的SVG图标HTML（实际场景）
+        html_content = '''
+        <div class="ppt-canvas" style="width: 1280px; height: 720px;">
+          <div class="ppt-element" data-id="icon-thinking" data-type="shape"
+               style="position: absolute; left: 90px; top: 190px; width: 48px; height: 48px;">
+            <svg width="48" height="48" viewBox="0 0 24 24">
+              <path d="M9 19C9 20.6569 10.3431 22 12 22C13.6569 22 15 20.6569 15 19H9ZM12 2C8.13401 2 5 5.13401 5 9C5 11.5307 6.42511 13.7849 8.5 15.0219V17C8.5 17.5523 8.94772 18 9.5 18H14.5C15.0523 18 15.5 17.5523 15.5 17V15.0219C17.5749 13.7849 19 11.5307 19 9C19 5.13401 15.866 2 12 2Z" fill="#FFCB00"/>
+            </svg>
+          </div>
+        </div>
+        '''
+
+        # 原始元素（模拟LLM返回前已有的元素）
+        original_elements = [
+            ElementData(
+                id='icon-thinking',
+                type='shape',
+                left=90,
+                top=190,
+                width=48,
+                height=48,
+                fill='#ffffff',  # 原始是白色
+                outline={'color': '#000000', 'width': 0, 'style': 'solid'},
+                viewBox=[24, 24],
+                path='M 0 0 L 48 0 L 48 48 L 0 48 Z'
+            )
+        ]
+
+        # 执行解析
+        optimized_elements = self.parser.parse_html_to_elements(
+            html_content, original_elements
+        )
+
+        # 验证结果
+        assert len(optimized_elements) == 1
+        icon_element = optimized_elements[0]
+
+        # 验证ID和类型
+        assert icon_element.id == 'icon-thinking'
+        assert icon_element.type == 'shape'
+
+        # 验证颜色被正确提取（从#ffffff变为#FFCB00）
+        assert icon_element.fill == '#FFCB00', f"Expected #FFCB00, got {icon_element.fill}"
+
+        # 验证path被正确提取
+        assert icon_element.path is not None
+        assert 'M9 19C9 20.6569' in icon_element.path
+
+        # 验证viewBox - 基于元素宽高48x48
+        assert icon_element.viewBox == [48.0, 48.0]
+
+    @pytest.mark.asyncio
+    async def test_shape_text_style_extraction(self):
+        """测试从shape元素提取文本样式（解决Vue prop验证错误）"""
+        # LLM返回的shape文本HTML（实际场景）
+        html_content = '''
+        <div class="ppt-canvas" style="width: 1280px; height: 720px;">
+          <div class="ppt-element ppt-shape" data-id="title-shape" data-type="shape"
+               style="position: absolute; left: 85px; top: 60px; width: 600px; height: 60px;">
+            <div class="shape-text">
+              <p style="margin: 0; line-height: 1.2;">
+                <span style="font-size: 48px; font-family: 'Microsoft YaHei', sans-serif; font-weight: 900; color: #118A5C;">
+                  脑力大比拼
+                </span>
+              </p>
+            </div>
+          </div>
+        </div>
+        '''
+
+        # 原始元素
+        original_elements = [
+            ElementData(
+                id='title-shape',
+                type='shape',
+                left=85,
+                top=60,
+                width=600,
+                height=60,
+                fill='',
+                outline={'color': '#000000', 'width': 0, 'style': 'solid'},
+                text={'content': ''},
+                viewBox=[600, 60],
+                path='M 0 0 L 600 0 L 600 60 L 0 60 Z'
+            )
+        ]
+
+        # 执行解析
+        optimized_elements = self.parser.parse_html_to_elements(
+            html_content, original_elements
+        )
+
+        # 验证结果
+        assert len(optimized_elements) == 1
+        title_element = optimized_elements[0]
+
+        # 验证ID和类型
+        assert title_element.id == 'title-shape'
+        assert title_element.type == 'shape'
+
+        # 验证文本内容
+        assert title_element.text['content'] == '脑力大比拼'
+
+        # 验证字体样式被正确提取（解决Vue prop验证错误）
+        assert hasattr(title_element, 'defaultFontName'), "Missing defaultFontName"
+        assert hasattr(title_element, 'defaultColor'), "Missing defaultColor"
+        assert hasattr(title_element, 'fontSize'), "Missing fontSize"
+        assert hasattr(title_element, 'fontWeight'), "Missing fontWeight"
+
+        assert 'Microsoft YaHei' in title_element.defaultFontName
+        assert title_element.defaultColor == '#118A5C'
+        assert title_element.fontSize == 48
+        assert title_element.fontWeight == '900'
+
+    @pytest.mark.asyncio
+    async def test_text_element_default_values(self):
+        """测试文本元素具有默认值（避免Vue prop验证错误）"""
+        # LLM返回的文本元素HTML（某些样式可能缺失）
+        html_content = '''
+        <div class="ppt-canvas" style="width: 1280px; height: 720px;">
+          <div class="ppt-element ppt-text" data-id="content-text" data-type="text"
+               style="position: absolute; left: 150px; top: 185px; width: 520px; height: 190px;">
+            <p style="margin: 0; line-height: 1.6;">
+              <span style="color: #333333;">报出一组数，-5℃和-12℃，不画数轴只用心算</span>
+            </p>
+          </div>
+        </div>
+        '''
+
+        # 原始元素（某些字段可能为None）
+        original_elements = [
+            ElementData(
+                id='content-text',
+                type='text',
+                left=150,
+                top=185,
+                width=520,
+                height=190,
+                content='原始文本内容',
+                defaultFontName=None,  # 模拟原始数据缺少该字段
+                defaultColor=None,     # 模拟原始数据缺少该字段
+                lineHeight=1.5,
+                fontSize=16
+            )
+        ]
+
+        # 执行解析
+        optimized_elements = self.parser.parse_html_to_elements(
+            html_content, original_elements
+        )
+
+        # 验证结果
+        assert len(optimized_elements) == 1
+        text_element = optimized_elements[0]
+
+        # 验证ID和类型
+        assert text_element.id == 'content-text'
+        assert text_element.type == 'text'
+
+        # 验证内容被更新
+        assert '报出一组数' in text_element.content
+
+        # 验证具有默认值（不会为None或undefined）
+        assert text_element.defaultFontName is not None, "defaultFontName should not be None"
+        assert text_element.defaultColor is not None, "defaultColor should not be None"
+
+        # 验证默认值正确
+        assert text_element.defaultFontName == 'Arial'  # 默认值
+        assert text_element.defaultColor == '#333333'   # 从style提取
+

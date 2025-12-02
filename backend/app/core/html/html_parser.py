@@ -118,17 +118,26 @@ class HTMLParser:
 
                 # 根据类型解析元素
                 try:
+                    # 智能类型检测：检查元素内部是否包含SVG，如果是则当作SVG处理
+                    has_svg = elem.find('svg') is not None
+
                     if element_type == 'text':
                         if original:
                             optimized = self._parse_text_element(elem, style_dict, original)
                         else:
                             optimized = self._parse_new_text_element(elem, style_dict, element_id)
-                    elif element_type == 'shape':
+                    elif element_type == 'shape' and not has_svg:
                         if original:
                             optimized = self._parse_shape_element(elem, style_dict, original)
                         else:
                             optimized = self._parse_new_shape_element(elem, style_dict, element_id)
-                    elif element_type == 'svg':
+                    elif element_type == 'shape' and has_svg:
+                        # 标为shape但包含SVG的元素，当SVG处理
+                        if original:
+                            optimized = self._parse_svg_element(elem, style_dict, original)
+                        else:
+                            optimized = self._parse_new_svg_element(elem, style_dict, element_id)
+                    elif element_type == 'svg' or has_svg:
                         if original:
                             optimized = self._parse_svg_element(elem, style_dict, original)
                         else:
@@ -216,9 +225,9 @@ class HTMLParser:
             rotate=parse_rotate_value(style_dict.get('transform', '')),
             # 文本内容
             content=text_content,
-            # 字体样式
-            defaultFontName=style_dict.get('font-family', '').strip('"\'') or original.defaultFontName,
-            defaultColor=style_dict.get('color', '') or original.defaultColor,
+            # 字体样式（确保有默认值，避免Vue prop验证错误）
+            defaultFontName=style_dict.get('font-family', '').strip('"\'') or original.defaultFontName or 'Arial',
+            defaultColor=style_dict.get('color', '') or original.defaultColor or '#333333',
             lineHeight=float(style_dict.get('line-height', original.lineHeight or 1.0)),
             fontSize=parse_px_value(style_dict.get('font-size', ''), default=original.fontSize),
             fontWeight=style_dict.get('font-weight', '') or original.fontWeight,
@@ -282,6 +291,20 @@ class HTMLParser:
             if 'gradient' not in bg.lower():
                 fill_value = bg
 
+        # 提取文本样式（如果存在文本）
+        text_style = {}
+        if text_content and shape_text_elem:
+            # 从shape-text元素或内层span提取样式
+            text_span = shape_text_elem.find('span')
+            if text_span and text_span.get('style'):
+                text_style_dict = parse_inline_style(text_span.get('style', ''))
+                text_style = {
+                    "defaultFontName": text_style_dict.get('font-family', '').strip('"\'') or original.defaultFontName or 'Arial',
+                    "defaultColor": text_style_dict.get('color', '') or original.defaultColor or '#333333',
+                    "fontSize": parse_px_value(text_style_dict.get('font-size', ''), default=original.fontSize),
+                    "fontWeight": text_style_dict.get('font-weight', '') or original.fontWeight,
+                }
+
         optimized = ElementData(
             id=elem.get('data-id'),
             type='shape',
@@ -299,6 +322,8 @@ class HTMLParser:
             viewBox=original.viewBox,
             path=original.path,
             fixedRatio=original.fixedRatio,
+            # 添加文本样式字段（如果有文本）
+            **text_style,
         )
 
         return optimized
@@ -349,7 +374,11 @@ class HTMLParser:
             rotate=parse_rotate_value(style_dict.get('transform', '')),
             # 形状样式
             fill=fill_value,
-            outline=None,
+            outline={
+                "color": "#000000",
+                "width": 0,
+                "style": "solid"
+            },
             text={"content": text_content} if text_content else {"content": ""},
             # 设置默认的viewBox和path，确保前端能正确渲染
             viewBox=default_viewBox,
@@ -454,9 +483,6 @@ class HTMLParser:
         viewBox_attr = elem.get('viewBox', '') or elem.get('viewbox', '') or elem.get('viewBox'.lower(), '')
         viewBox = None
 
-
-
-
         if viewBox_attr:
             try:
                 viewBox_parts = [float(x.strip()) for x in viewBox_attr.split()]
@@ -466,22 +492,28 @@ class HTMLParser:
             except (ValueError, AttributeError) as e:
                 pass
 
-        # 提取所有path元素的d属性
+        # 提取所有path元素的d属性和fill颜色
         path_elems = elem.find_all('path')
         path_d_list = []
+        path_fill_list = []
         for path_elem in path_elems:
             d_attr = path_elem.get('d', '')
+            fill_attr = path_elem.get('fill', '')
             if d_attr:
                 path_d_list.append(d_attr)
+                path_fill_list.append(fill_attr)
 
         # 使用提取的路径或原始路径
         path_d = ''
+        path_fill = ''  # 提取第一个path的fill颜色
         if path_d_list:
             if len(path_d_list) == 1:
                 path_d = path_d_list[0]
+                path_fill = path_fill_list[0] if path_fill_list else ''
             else:
                 # 多个路径时，使用第一个
                 path_d = path_d_list[0]
+                path_fill = path_fill_list[0] if path_fill_list else ''
                 logger.debug(
                     "发现多个SVG路径，仅使用第一个",
                     operation="svg_multiple_paths",
@@ -507,6 +539,11 @@ class HTMLParser:
             elem_height = parse_px_value(style_dict.get('height', ''), default=original.height or 40)
             final_viewBox = [elem_width, elem_height]
 
+        # 确定fill颜色：优先使用path的fill，其次使用原始fill
+        if path_fill:
+            fill_value = path_fill
+        else:
+            fill_value = original.fill
 
         optimized = ElementData(
             id=elem.get('data-id'),
@@ -521,8 +558,8 @@ class HTMLParser:
             viewBox=final_viewBox,
             path=path_d or original.path,
             fixedRatio=original.fixedRatio,
-            # 样式
-            fill=original.fill,
+            # 样式 - 使用提取的SVG路径颜色
+            fill=fill_value,
             # 保持原始文本
             text=original.text,
         )
@@ -550,25 +587,31 @@ class HTMLParser:
             except (ValueError, AttributeError):
                 pass
 
-        # 提取所有path元素的d属性，并合并为一个复杂的路径
+        # 提取所有path元素的d属性和fill颜色
         path_elems = elem.find_all('path')
         path_d_list = []
+        path_fill_list = []
         for path_elem in path_elems:
             d_attr = path_elem.get('d', '')
+            fill_attr = path_elem.get('fill', '')
             if d_attr:
                 path_d_list.append(d_attr)
+                path_fill_list.append(fill_attr)
 
         # 合并所有路径，如果只有一个路径则直接使用，否则需要特殊处理
         # 注意：多个path可能需要用<g>标签分组，这里简化处理
         path_d = ''
+        path_fill = ''  # 提取第一个path的fill颜色
         if path_d_list:
             # 如果有多个path，尝试合并（简化处理）
             if len(path_d_list) == 1:
                 path_d = path_d_list[0]
+                path_fill = path_fill_list[0] if path_fill_list else ''
             else:
                 # 多个路径时，组合成一个组（实际渲染时前端需要支持多path）
                 # 这里先使用第一个路径，后续可以优化
                 path_d = path_d_list[0]
+                path_fill = path_fill_list[0] if path_fill_list else ''
                 logger.debug(
                     "发现多个SVG路径，仅使用第一个",
                     operation="svg_multiple_paths",
@@ -584,6 +627,23 @@ class HTMLParser:
         if not path_d:
             path_d = f'M 0 0 L {width} 0 L {width} {height} L 0 {height} Z'
 
+        # 确定fill颜色：优先使用path的fill，其次是style中的background，最后使用默认值
+        if path_fill:
+            fill_value = path_fill
+        elif 'background-color' in style_dict:
+            fill_value = style_dict['background-color']
+        elif 'background' in style_dict:
+            bg = style_dict['background']
+            if 'gradient' not in bg.lower():
+                fill_value = bg
+            else:
+                # 提取渐变中的第一个颜色
+                import re
+                color_match = re.search(r'#[0-9a-fA-F]{6}', bg)
+                fill_value = color_match.group(0) if color_match else '#47acc5'
+        else:
+            fill_value = '#ffffff'
+
         # 使用shape类型，让前端能复用现有的shape渲染逻辑
         optimized = ElementData(
             id=element_id,
@@ -598,8 +658,13 @@ class HTMLParser:
             viewBox=viewBox or [width, height],
             path=path_d or f'M 0 0 L {width} 0 L {width} {height} L 0 {height} Z',
             fixedRatio=False,
-            # 样式
-            fill='#ffffff',
+            # 样式 - 使用提取的SVG路径颜色
+            fill=fill_value,
+            outline={
+                "color": "#000000",
+                "width": 0,
+                "style": "solid"
+            },
             # 空文本
             text={"content": ""},
         )

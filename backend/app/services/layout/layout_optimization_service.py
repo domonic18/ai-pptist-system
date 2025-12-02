@@ -402,38 +402,61 @@ class LayoutOptimizationService:
                         **validation_details
                     )
 
-            # 只有存在无效ID时才报错
+            # 自动修复无效ID（而不是报错）
             if invalid_new_ids:
-                logger.error(
-                    "布局优化中出现了无效ID的新元素",
-                    operation="layout_optimization_invalid_element_ids",
-                    invalid_elements=sorted(list(invalid_new_ids)),
-                    valid_elements=sorted(list(valid_new_ids)),
-                    invalid_id_details=[
-                        {
-                            "id": element_id,
-                            "length": len(element_id) if element_id else 0,
-                            "chars_valid": all(char in id_generator.ALPHABET for char in element_id) if element_id else False
-                        }
-                        for element_id in invalid_new_ids
-                    ]
-                )
-                raise ValueError(
-                    f"布局优化出现无效元素ID：{invalid_new_ids}。"
-                    f"新元素ID必须符合nanoid(10)格式（10位字母数字组合）。"
+                logger.warning(
+                    "发现无效的新元素ID，将自动修复",
+                    operation="layout_optimization_auto_fixing_ids",
+                    invalid_ids_count=len(invalid_new_ids),
+                    invalid_ids_list=sorted(list(invalid_new_ids))
                 )
 
-            if valid_new_ids:
+                # 创建ID映射（旧ID -> 新ID）
+                id_mapping = {}
+                for old_id in invalid_new_ids:
+                    new_id = id_generator.generate_id()
+                    id_mapping[old_id] = new_id
+                    logger.info(
+                        "自动修复元素ID",
+                        operation="auto_fix_element_id",
+                        old_id=old_id,
+                        new_id=new_id
+                    )
+
+                # 更新所有元素的ID（保持引用一致性）
+                id_replacements = 0
+                for element in optimized:
+                    if element.id in id_mapping:
+                        old_id = element.id
+                        element.id = id_mapping[old_id]
+                        id_replacements += 1
+                        logger.debug(
+                            f"更新元素ID: {old_id} -> {element.id}",
+                            operation="element_id_updated",
+                            old_id=old_id,
+                            new_id=element.id,
+                            element_type=element.type
+                        )
+
+                logger.info(
+                    "自动修复ID完成",
+                    operation="layout_optimization_auto_fix_complete",
+                    fixed_ids_count=id_replacements
+                )
+
+            # 记录所有新元素（包括被修复的）
+            all_new_ids = [element.id for element in optimized if element.id not in original_ids]
+            if all_new_ids:
                 logger.info(
                     "布局优化成功创建了新的装饰元素",
                     operation="layout_optimization_new_elements_created",
-                    new_elements_count=len(valid_new_ids),
-                    new_element_ids=sorted(list(valid_new_ids))
+                    new_elements_count=len(all_new_ids),
+                    new_element_ids=sorted(list(all_new_ids))
                 )
 
                 # 详细记录每个新元素的信息
                 for element in optimized:
-                    if element.id in valid_new_ids:
+                    if element.id in all_new_ids:
                         logger.info(
                             f"新元素详情 - ID: {element.id}, 类型: {element.type}, "
                             f"位置: ({element.left}, {element.top}), 尺寸: {element.width}x{element.height}, "

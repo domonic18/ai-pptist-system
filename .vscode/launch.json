@@ -93,7 +93,7 @@
         "Celery: 启动Worker进程",
         "Celery: 启动Beat调度器"
       ],
-      "preLaunchTask": "${defaultBuildTask}",
+      "preLaunchTask": "install all dependencies",
       "stopAll": true
     }
   ]
