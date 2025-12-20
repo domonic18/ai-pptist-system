@@ -28,7 +28,10 @@ class ImageGenerationService:
         width: int = 1024,
         height: int = 1024,
         quality: str = "standard",
-        style: str = "vivid"
+        style: str = "vivid",
+        ref_images: list = None,
+        aspect_ratio: str = "16:9",
+        resolution: str = "2K"
     ) -> Dict[str, Any]:
         """
         生成图片
@@ -40,6 +43,9 @@ class ImageGenerationService:
             height: 图片高度
             quality: 图片质量
             style: 图片风格
+            ref_images: 参考图片列表（base64编码）
+            aspect_ratio: 图片比例（如 "16:9"）
+            resolution: 分辨率（如 "2K"）
 
         Returns:
             Dict[str, Any]: 生成结果
@@ -49,7 +55,8 @@ class ImageGenerationService:
                 "prompt": prompt[:100] + "..." if len(prompt) > 100 else prompt,
                 "generation_model": generation_model,
                 "width": width,
-                "height": height
+                "height": height,
+                "ref_images_count": len(ref_images) if ref_images else 0
             })
 
             # 获取模型配置
@@ -64,7 +71,8 @@ class ImageGenerationService:
 
             # 生成图片
             result = await self._execute_generation(
-                provider, prompt, width, height, quality, style
+                provider, prompt, width, height, quality, style,
+                ref_images, aspect_ratio, resolution
             )
 
             logger.info("图片生成服务完成", extra={
@@ -85,7 +93,10 @@ class ImageGenerationService:
         width: int,
         height: int,
         quality: str,
-        style: str
+        style: str,
+        ref_images: list = None,
+        aspect_ratio: str = "16:9",
+        resolution: str = "2K"
     ) -> Dict[str, Any]:
         """执行图片生成"""
         try:
@@ -96,7 +107,8 @@ class ImageGenerationService:
                 "provider_type": type(provider).__name__,
                 "size": size,
                 "quality": quality,
-                "style": style
+                "style": style,
+                "ref_images_count": len(ref_images) if ref_images else 0
             })
 
             # 调用提供商生成图片
@@ -104,7 +116,10 @@ class ImageGenerationService:
                 prompt=prompt,
                 size=size,
                 quality=quality,
-                style=style
+                style=style,
+                ref_images=ref_images,
+                aspect_ratio=aspect_ratio,
+                resolution=resolution
             )
 
             logger.info("提供商图片生成完成", extra={

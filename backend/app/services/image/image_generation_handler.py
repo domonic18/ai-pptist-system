@@ -48,12 +48,16 @@ class ImageGenerationHandler:
             height = request_data.get("height", 1024)
             quality = request_data.get("quality", "standard")
             style = request_data.get("style", "vivid")
+            ref_images = request_data.get("ref_images", [])
+            aspect_ratio = request_data.get("aspect_ratio", "16:9")
+            resolution = request_data.get("resolution", "2K")
 
             logger.info("处理图片生成请求", extra={
                 "prompt": prompt[:100] + "..." if len(prompt) > 100 else prompt,
                 "generation_model": generation_model,
                 "width": width,
-                "height": height
+                "height": height,
+                "ref_images_count": len(ref_images) if ref_images else 0
             })
 
             # 调用服务生成图片
@@ -63,7 +67,10 @@ class ImageGenerationHandler:
                 width=width,
                 height=height,
                 quality=quality,
-                style=style
+                style=style,
+                ref_images=ref_images,
+                aspect_ratio=aspect_ratio,
+                resolution=resolution
             )
 
             return result

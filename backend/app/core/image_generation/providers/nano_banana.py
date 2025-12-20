@@ -253,55 +253,118 @@ class NanoBananaProvider(BaseImageProvider):
             )
             
             # 提取图片
+            if not response.parts:
+                error_msg = "API响应中没有parts数据"
+                logger.error(error_msg, operation="no_parts_in_response")
+                return ImageGenerationResult(
+                    success=False,
+                    error_message=error_msg
+                )
+            
             for i, part in enumerate(response.parts):
+                logger.debug(
+                    f"检查响应部分 {i}",
+                    operation="check_response_part",
+                    has_text=part.text is not None,
+                    has_inline_data=hasattr(part, 'inline_data') and part.inline_data is not None
+                )
+                
+                # 优先检查 inline_data
+                if hasattr(part, 'inline_data') and part.inline_data is not None:
+                    try:
+                        image_data = part.inline_data.data
+                        image = Image.open(io.BytesIO(image_data))
+                        
+                        logger.info(
+                            "成功从inline_data提取图片",
+                            operation="image_extracted_from_inline_data",
+                            part_index=i,
+                            image_size=image.size
+                        )
+                        
+                        # 将PIL Image转换为base64 data URL
+                        buffered = io.BytesIO()
+                        image.save(buffered, format="PNG")
+                        img_base64 = base64.b64encode(buffered.getvalue()).decode()
+                        image_url = f"data:image/png;base64,{img_base64}"
+                        
+                        return ImageGenerationResult(
+                            success=True,
+                            image_url=image_url,
+                            metadata={
+                                "model": self.model,
+                                "aspect_ratio": aspect_ratio,
+                                "resolution": resolution,
+                                "prompt": prompt,
+                                "has_ref_images": len(processed_ref_images) > 0,
+                                "ref_images_count": len(processed_ref_images),
+                                "width": image.size[0],
+                                "height": image.size[1]
+                            }
+                        )
+                    except Exception as e:
+                        logger.error(
+                            "从inline_data提取图片失败",
+                            operation="inline_data_extraction_error",
+                            part_index=i,
+                            exception=e
+                        )
+                
+                # 如果是文本，记录日志
                 if part.text is not None:
                     logger.debug(
                         f"响应部分 {i}: 文本",
                         operation="response_part_text",
                         text_preview=part.text[:100] if len(part.text) > 100 else part.text
                     )
-                else:
-                    try:
-                        image = part.as_image()
-                        if image:
-                            logger.info(
-                                "成功提取图片",
-                                operation="image_extracted",
-                                part_index=i,
-                                image_size=image.size
-                            )
-                            
-                            # 将PIL Image转换为base64 data URL
-                            buffered = io.BytesIO()
-                            image.save(buffered, format="PNG")
-                            img_base64 = base64.b64encode(buffered.getvalue()).decode()
-                            image_url = f"data:image/png;base64,{img_base64}"
-                            
-                            return ImageGenerationResult(
-                                success=True,
-                                image_url=image_url,
-                                metadata={
-                                    "model": self.model,
-                                    "aspect_ratio": aspect_ratio,
-                                    "resolution": resolution,
-                                    "prompt": prompt,
-                                    "has_ref_images": len(processed_ref_images) > 0,
-                                    "ref_images_count": len(processed_ref_images),
-                                    "width": image.size[0],
-                                    "height": image.size[1]
-                                }
-                            )
-                    except Exception as e:
-                        logger.error(
-                            f"提取图片失败",
-                            operation="image_extraction_error",
+                    continue
+                
+                # 尝试使用 as_image() 方法
+                try:
+                    image = part.as_image()
+                    if image:
+                        logger.info(
+                            "成功通过as_image()提取图片",
+                            operation="image_extracted_as_image",
                             part_index=i,
-                            exception=e
+                            image_size=image.size
                         )
+                        
+                        # 将PIL Image转换为base64 data URL
+                        buffered = io.BytesIO()
+                        image.save(buffered, format="PNG")
+                        img_base64 = base64.b64encode(buffered.getvalue()).decode()
+                        image_url = f"data:image/png;base64,{img_base64}"
+                        
+                        return ImageGenerationResult(
+                            success=True,
+                            image_url=image_url,
+                            metadata={
+                                "model": self.model,
+                                "aspect_ratio": aspect_ratio,
+                                "resolution": resolution,
+                                "prompt": prompt,
+                                "has_ref_images": len(processed_ref_images) > 0,
+                                "ref_images_count": len(processed_ref_images),
+                                "width": image.size[0],
+                                "height": image.size[1]
+                            }
+                        )
+                except Exception as e:
+                    logger.error(
+                        "as_image()提取图片失败",
+                        operation="as_image_extraction_error",
+                        part_index=i,
+                        exception=e
+                    )
             
             # 如果没有找到图片
             error_msg = "API响应中未找到图片数据"
-            logger.error(error_msg, operation="no_image_in_response")
+            logger.error(
+                error_msg,
+                operation="no_image_in_response",
+                response_parts_count=len(response.parts)
+            )
             return ImageGenerationResult(
                 success=False,
                 error_message=error_msg
