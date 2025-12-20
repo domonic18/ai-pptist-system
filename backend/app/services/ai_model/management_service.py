@@ -371,7 +371,8 @@ class ManagementService:
                 'volcengine': 'volcengine_ark',
                 'doubao': 'volcengine_ark',
                 'midjourney': 'midjourney',
-                'stable_diffusion': 'stable_diffusion'
+                'stable_diffusion': 'stable_diffusion',
+                'nano_banana': 'nano_banana'
             }
 
             image_provider_name = provider_mapping.get(

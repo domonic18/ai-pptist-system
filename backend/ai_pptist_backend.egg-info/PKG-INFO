@@ -1,0 +1,60 @@
+Metadata-Version: 2.4
+Name: ai-pptist-backend
+Version: 1.0.0
+Summary: AI PPTist Backend API
+Author-email: AI PPTist Team <team@ai-pptist.com>
+License: MIT
+Keywords: ai,presentation,fastapi,openai
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.115.0
+Requires-Dist: uvicorn[standard]==0.24.0
+Requires-Dist: python-multipart==0.0.6
+Requires-Dist: sqlalchemy==2.0.23
+Requires-Dist: asyncpg==0.29.0
+Requires-Dist: greenlet>=2.0.2
+Requires-Dist: pydantic>=2.9.0
+Requires-Dist: pydantic-settings==2.1.0
+Requires-Dist: python-dotenv==1.0.0
+Requires-Dist: openai<2.0.0,>=1.17
+Requires-Dist: mlflow==3.1.4
+Requires-Dist: tenacity>=8.2.3
+Requires-Dist: tiktoken>=0.5.2
+Requires-Dist: dashscope>=1.17.0
+Requires-Dist: google-genai>=1.56.0
+Requires-Dist: cos-python-sdk-v5==1.9.27
+Requires-Dist: requests==2.31.0
+Requires-Dist: redis[hiredis]>=5.0.0
+Requires-Dist: httpx>=0.25.0
+Requires-Dist: celery>=5.3.0
+Requires-Dist: redis>=5.0.0
+Requires-Dist: markdown==3.8
+Requires-Dist: aiohttp>=3.8.0
+Requires-Dist: jieba>=0.42.1
+Requires-Dist: beautifulsoup4>=4.12.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Requires-Dist: httpx>=0.25.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.1.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: isort>=5.12.0; extra == "dev"
+Requires-Dist: flake8>=6.0.0; extra == "dev"
+Requires-Dist: mypy>=1.5.0; extra == "dev"
+Requires-Dist: pre-commit>=3.4.0; extra == "dev"
+Requires-Dist: ipdb>=0.13.13; extra == "dev"
+Requires-Dist: ipython>=8.15.0; extra == "dev"
+Requires-Dist: sphinx>=7.2.0; extra == "dev"
+Requires-Dist: sphinx-rtd-theme>=2.0.0; extra == "dev"
+Provides-Extra: image-generation
+Requires-Dist: dashscope>=1.17.0; extra == "image-generation"
+Requires-Dist: volcenginesdkarkruntime>=1.0.0; extra == "image-generation"
+Provides-Extra: docker
