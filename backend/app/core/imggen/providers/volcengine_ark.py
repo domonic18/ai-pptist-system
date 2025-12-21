@@ -7,7 +7,7 @@ import time
 import asyncio
 from typing import Optional, List, Dict, Any
 from app.core.log_utils import get_logger
-from app.core.image_generation.base import BaseImageProvider, ImageGenerationResult
+from app.core.imggen.base import BaseImageProvider, ImageGenerationResult
 
 logger = get_logger(__name__)
 

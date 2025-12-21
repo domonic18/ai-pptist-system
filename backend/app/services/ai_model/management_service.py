@@ -359,7 +359,7 @@ class ManagementService:
     def create_image_generation_provider(self, model_config: Dict[str, Any]):
         """创建图片生成提供商"""
         try:
-            from app.core.image_generation import ImageProviderFactory
+            from app.core.imggen import ImageProviderFactory
 
             # 映射provider名称到图片生成提供商
             provider_mapping = {

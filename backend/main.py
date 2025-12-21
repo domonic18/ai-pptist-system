@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.api.v1.router import api_router
 from app.core.log_utils import setup_logging, get_logger
 from app.core.mlflow_tracker import ensure_mlflow_initialized
+from app.core.imggen import register_all_providers
 
 # 初始化日志系统
 setup_logging()
@@ -35,6 +36,9 @@ async def lifespan(_: FastAPI):
         logger.info("MLflow追踪已启用 - 将自动捕获AI调用的request/response内容")
     else:
         logger.warning("MLflow追踪未启用，AI调用将不会被追踪")
+    
+    # 注册所有图片生成提供商
+    register_all_providers()
 
     logger.info("应用启动完成")
 
