@@ -8,6 +8,12 @@ import openai
 from app.core.log_utils import get_logger
 from app.core.ai.providers.base.vision import BaseVisionProvider
 from app.core.ai.tracker import MLflowTracingMixin
+from .utils import (
+    create_openai_client,
+    format_response,
+    handle_openai_exception,
+    get_trace_inputs
+)
 
 logger = get_logger(__name__)
 
@@ -24,7 +30,7 @@ class OpenAICompatibleVisionProvider(BaseVisionProvider, MLflowTracingMixin):
         MLflowTracingMixin.__init__(self)
 
         # 创建OpenAI客户端
-        self.client = openai.AsyncOpenAI(
+        self.client = create_openai_client(
             api_key=model_config.api_key,
             base_url=model_config.base_url
         )
@@ -72,8 +78,8 @@ class OpenAICompatibleVisionProvider(BaseVisionProvider, MLflowTracingMixin):
         try:
             return await self._process_vision_request(messages, temperature, max_tokens, **kwargs)
         except Exception as e:
-            # 统一异常处理
-            error_message = self._handle_openai_exception(e)
+            # 使用工具函数处理OpenAI异常
+            error_message = handle_openai_exception(e, self.model_config.base_url)
             logger.error(
                 "OpenAI兼容Vision调用失败",
                 operation="openai_compatible_vision_error",
@@ -89,7 +95,18 @@ class OpenAICompatibleVisionProvider(BaseVisionProvider, MLflowTracingMixin):
         max_tokens: int,
         **kwargs
     ) -> Dict[str, Any]:
-        """处理Vision请求"""
+        """
+        处理Vision请求并使用MLflow进行追踪
+
+        Args:
+            messages: 对话消息列表（包含图片和文本）
+            temperature: 温度参数
+            max_tokens: 最大生成token数
+            **kwargs: 传递给OpenAI API的其他参数
+
+        Returns:
+            格式化后的响应结果
+        """
 
         async def call_api():
             response = await self.client.chat.completions.create(
@@ -99,57 +116,18 @@ class OpenAICompatibleVisionProvider(BaseVisionProvider, MLflowTracingMixin):
                 max_tokens=max_tokens,
                 **kwargs
             )
-            return self._format_response(response)
+            return format_response(response)
 
         # 使用MLflow追踪
         return await self._with_mlflow_trace(
             operation_name="openai_compatible_vision",
-            inputs=self._get_trace_inputs(messages, temperature, max_tokens),
+            inputs=get_trace_inputs(
+                self.model_config.model_name,
+                self.model_config.base_url,
+                messages,
+                temperature,
+                max_tokens
+            ),
             call_func=call_api
         )
 
-    def _handle_openai_exception(self, exception) -> str:
-        """统一处理OpenAI异常"""
-        error_message = f"Vision调用失败 ({type(exception).__name__}): {str(exception)}"
-
-        # 简化异常处理逻辑
-        if isinstance(exception, openai.APIError):
-            status_code = getattr(exception, 'status_code', 'unknown')
-            logger.error(f"OpenAI API错误 (状态码: {status_code}): {str(exception)}")
-            error_message = f"API调用失败 (状态码: {status_code}): {str(exception)}"
-
-        elif isinstance(exception, openai.APIConnectionError):
-            logger.error(f"OpenAI API连接错误: {str(exception)}")
-            error_message = f"无法连接到API ({self.model_config.base_url}): {str(exception)}"
-
-        elif isinstance(exception, openai.RateLimitError):
-            logger.error(f"OpenAI API速率限制: {str(exception)}")
-            error_message = f"API速率限制: {str(exception)}"
-
-        elif isinstance(exception, openai.AuthenticationError):
-            logger.error(f"OpenAI API认证失败: {str(exception)}")
-            error_message = f"API认证失败，请检查API密钥: {str(exception)}"
-
-        return error_message
-
-    def _get_trace_inputs(self, messages, temperature, max_tokens) -> Dict[str, Any]:
-        """获取用于MLflow追踪的输入数据"""
-        return {
-            "model": self.model_config.model_name,
-            "base_url": self.model_config.base_url,
-            "message_count": len(messages),
-            "temperature": temperature,
-            "max_tokens": max_tokens
-        }
-
-    def _format_response(self, response) -> Dict[str, Any]:
-        """格式化API响应为统一格式"""
-        return {
-            "content": response.choices[0].message.content,
-            "model": response.model,
-            "usage": {
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens
-            } if response.usage else {}
-        }
