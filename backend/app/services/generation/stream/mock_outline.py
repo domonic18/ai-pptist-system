@@ -68,8 +68,7 @@ class MockOutlineService:
         system_prompt: str,
         user_prompt: str,
         temperature: float,
-        max_tokens: int,
-        ai_model_config: Optional[Dict[str, Any]] = None
+        max_tokens: int
     ) -> AsyncGenerator[str, None]:
         """
         模拟大纲流式调用
@@ -79,7 +78,6 @@ class MockOutlineService:
             user_prompt: 用户提示词
             temperature: 温度参数
             max_tokens: 最大token数
-            ai_model_config: 模型配置
 
         Returns:
             AsyncGenerator[str, None]: 内容块生成器

@@ -336,30 +336,36 @@ class ManagementService:
         try:
             from app.core.ai.factory import AIProviderFactory
             from app.core.ai.models import ModelCapability
+            from app.core.ai.config import ModelConfig as AIModelConfig
 
-            provider_name = model_config.get("provider")
-            if not provider_name:
-                logger.error("模型配置缺少provider字段")
+            # 使用新架构：从provider_mapping获取image_gen的provider
+            provider_mapping = model_config.get("provider_mapping", {})
+            if not provider_mapping or "image_gen" not in provider_mapping:
+                logger.error("模型配置缺少image_gen的provider映射")
                 return None
 
-            # 创建模型配置对象
-            config_obj = type('ModelConfig', (), {
-                'name': model_config["ai_model_name"],
-                'base_url': model_config["base_url"],
-                'api_key': model_config["api_key"],
-                'parameters': model_config.get("parameters", {})
-            })()
+            # 创建ModelConfig对象
+            ai_model_config = AIModelConfig(
+                model_id=model_config.get("id", ""),
+                model_name=model_config["ai_model_name"],
+                api_key=model_config["api_key"],
+                base_url=model_config.get("base_url"),
+                capabilities=model_config.get("capabilities", []),
+                provider_mapping=provider_mapping,
+                parameters=model_config.get("parameters", {}),
+                max_tokens=model_config.get("max_tokens"),
+                context_window=model_config.get("context_window")
+            )
 
             # 使用统一的AIProviderFactory创建提供商实例
-            provider = AIProviderFactory.create_provider(
-                capability=ModelCapability.IMAGE_GEN,
-                provider_name=provider_name,
-                model_config=config_obj
+            provider = AIProviderFactory.create(
+                model_config=ai_model_config,
+                capability=ModelCapability.IMAGE_GEN
             )
 
             logger.info("图片生成提供商创建成功", extra={
                 "provider_type": type(provider).__name__,
-                "provider_name": provider_name
+                "provider_name": provider_mapping.get("image_gen")
             })
 
             return provider

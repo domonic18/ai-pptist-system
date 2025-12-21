@@ -24,7 +24,7 @@ class BaseChatProvider(BaseAIProvider):
         max_tokens: int = 2048,
         stream: bool = False,
         **kwargs
-    ) -> Union[str, AsyncGenerator[str, None]]:
+    ) -> Union[Dict, AsyncGenerator[str, None]]:
         """
         对话接口
         
@@ -36,7 +36,8 @@ class BaseChatProvider(BaseAIProvider):
             **kwargs: 其他参数
             
         Returns:
-            对话结果（文本）或流式生成器
+            - 当 stream=False 时，返回字典：{"content": str, "model": str, "usage": dict}
+            - 当 stream=True 时，返回流式生成器（逐块返回文本）
         """
         pass
 

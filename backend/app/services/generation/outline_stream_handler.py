@@ -8,6 +8,7 @@ from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.generation.outline_stream_service import OutlineStreamService
+from app.repositories.ai_model import AIModelRepository
 from app.core.log_utils import get_logger
 from app.schemas.generation_outline import OutlineGenerationRequest
 
@@ -25,7 +26,10 @@ class OutlineStreamHandler:
             db: 数据库会话
         """
         self.db = db
-        self.stream_service = OutlineStreamService()
+        # 创建 Repository（Repository 层）
+        self.ai_model_repo = AIModelRepository(db)
+        # 注入 Repository 到 Service（Service 层）
+        self.stream_service = OutlineStreamService(self.ai_model_repo)
 
     async def handle_outline_stream_generation(
         self,
@@ -61,7 +65,7 @@ class OutlineStreamHandler:
                 input_content=request.input_content,
                 slide_count=request.slide_count or 8,
                 language=request.language or "zh-CN",
-                ai_model_config=request.ai_model_config
+                ai_model_id=request.ai_model_id
             ):
                 yield f"data: {event}\n\n"
 

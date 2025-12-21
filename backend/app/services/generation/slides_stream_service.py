@@ -131,14 +131,18 @@ class SlidesStreamService:
                 accumulated_content = ""
                 generated_slides = []
 
-                # 使用新的统一AI架构
-                provider_name = ai_model_config.get('provider', 'openai_compatible') if ai_model_config else 'openai_compatible'
-                model_config_obj = type('ModelConfig', (), ai_model_config or {})()
+                # 使用新的统一AI架构 - 从前端传来的配置获取provider
+                if ai_model_config:
+                    # 优先从provider_mapping获取chat的provider
+                    provider_mapping = ai_model_config.get('provider_mapping', {})
+                    provider_name = provider_mapping.get('chat') or ai_model_config.get('provider', 'openai_compatible')
+                else:
+                    provider_name = 'openai_compatible'
                 
                 chat_provider = AIProviderFactory.create_provider(
                     capability=ModelCapability.CHAT,
                     provider_name=provider_name,
-                    model_config=model_config_obj
+                    model_config=ai_model_config or {}
                 )
                 
                 # 构建消息列表
@@ -147,12 +151,16 @@ class SlidesStreamService:
                     {"role": "user", "content": user_prompt}
                 ]
                 
-                # 调用流式chat接口
-                async for chunk in chat_provider.stream_chat(
+                # 调用流式chat接口（使用统一的chat方法，stream=True）
+                # 先await获取异步生成器，然后async for迭代
+                stream_generator = await chat_provider.chat(
                     messages=messages,
                     temperature=temperature,
-                    max_tokens=max_tokens
-                ):
+                    max_tokens=max_tokens,
+                    stream=True
+                )
+                
+                async for chunk in stream_generator:
                     # 累积内容
                     accumulated_content += chunk
 

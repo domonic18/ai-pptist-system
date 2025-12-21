@@ -128,20 +128,26 @@ class AnalysisService:
             user_prompt_params={"slide_data": slide_data_for_prompt}
         )
 
-        # 使用新的统一AI架构
+        # 使用新的统一AI架构 - 从数据库模型获取provider
         provider_name = ai_model.get_provider_for_capability('vision') or 'openai_compatible'
         
-        model_config_obj = type('ModelConfig', (), {
-            'name': ai_model.ai_model_name,
+        # 将数据库模型转换为配置字典
+        model_config_dict = {
+            'id': ai_model.id,
+            'ai_model_name': ai_model.ai_model_name,
             'base_url': ai_model.base_url,
             'api_key': ai_model.api_key,
-            'parameters': ai_model.parameters or {}
-        })()
+            'capabilities': ai_model.capabilities or [],
+            'provider_mapping': ai_model.provider_mapping or {},
+            'parameters': ai_model.parameters or {},
+            'max_tokens': ai_model.max_tokens,
+            'context_window': ai_model.context_window
+        }
         
         vision_provider = AIProviderFactory.create_provider(
             capability=ModelCapability.VISION,
             provider_name=provider_name,
-            model_config=model_config_obj
+            model_config=model_config_dict
         )
         
         # 构建消息列表（包含图片）

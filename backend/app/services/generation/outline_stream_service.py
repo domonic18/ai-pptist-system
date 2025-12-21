@@ -16,6 +16,7 @@ from app.core.ai.models import ModelCapability
 from app.services.generation.stream.common_utils import StreamEventGenerator
 from app.prompts import PromptHelper
 from app.services.generation.stream.mock_outline import mock_outline_service
+from app.repositories.ai_model import AIModelRepository
 
 logger = get_logger(__name__)
 
@@ -23,10 +24,16 @@ logger = get_logger(__name__)
 class OutlineStreamService:
     """大纲流式生成服务"""
 
-    def __init__(self):
-        """初始化大纲流式生成服务"""
+    def __init__(self, ai_model_repo: AIModelRepository):
+        """
+        初始化大纲流式生成服务
+        
+        Args:
+            ai_model_repo: AI模型仓储（依赖注入）
+        """
         self.prompt_manager = get_prompt_manager()
         self.helper = OutlineHelper()
+        self.ai_model_repo = ai_model_repo
 
         # 初始化通用工具
         self.stream_events = StreamEventGenerator()
@@ -38,7 +45,7 @@ class OutlineStreamService:
         input_content: Optional[str] = None,
         slide_count: int = 8,
         language: str = "zh-CN",
-        ai_model_config: Optional[Dict[str, Any]] = None
+        ai_model_id: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
         """
         流式生成演示文稿大纲
@@ -48,7 +55,7 @@ class OutlineStreamService:
             input_content: 输入内容或提示
             slide_count: 幻灯片数量
             language: 输出语言
-            ai_model_config: 模型配置
+            ai_model_id: 模型ID（从数据库查询完整配置）
 
         Returns:
             AsyncGenerator[str, None]: SSE事件生成器
@@ -104,8 +111,7 @@ class OutlineStreamService:
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
                     temperature=temperature,
-                    max_tokens=max_tokens,
-                    ai_model_config=ai_model_config
+                    max_tokens=max_tokens
                 ):
                     # 累积内容用于后续解析
                     accumulated_content += chunk
@@ -121,19 +127,59 @@ class OutlineStreamService:
                     "使用AI服务生成大纲",
                     operation="outline_generation_ai_mode",
                     title=title,
-                    slide_count=slide_count
+                    slide_count=slide_count,
+                    ai_model_id=ai_model_id
                 )
                 # AI模式：使用新的统一AI架构
                 accumulated_content = ""
                 
-                # 使用新的统一AI架构
-                provider_name = ai_model_config.get('provider', 'openai_compatible') if ai_model_config else 'openai_compatible'
-                model_config_obj = type('ModelConfig', (), ai_model_config or {})()
+                # 从数据库查询模型配置
+                if not ai_model_id:
+                    raise ValueError("AI模型ID不能为空")
+                
+                ai_model = await self.ai_model_repo.get_model_by_id(ai_model_id)
+                if not ai_model:
+                    raise ValueError(f"未找到模型: {ai_model_id}")
+                
+                if not ai_model.is_enabled:
+                    raise ValueError(f"模型已禁用: {ai_model.name}")
+                
+                # 检查模型是否支持chat能力
+                if 'chat' not in ai_model.capabilities:
+                    raise ValueError(f"模型不支持chat能力: {ai_model.name}")
+                
+                # 获取provider名称
+                provider_mapping = ai_model.provider_mapping or {}
+                provider_name = provider_mapping.get('chat', 'openai_compatible')
+                
+                # 构建模型配置
+                model_config = {
+                    'id': ai_model.id,
+                    'ai_model_name': ai_model.ai_model_name,
+                    'base_url': ai_model.base_url,
+                    'api_key': ai_model.api_key,
+                    'capabilities': ai_model.capabilities,
+                    'provider_mapping': ai_model.provider_mapping,
+                    'max_tokens': ai_model.max_tokens,
+                    'context_window': ai_model.context_window,
+                    'parameters': ai_model.parameters or {}
+                }
+                
+                logger.info(
+                    "创建AI Provider",
+                    operation="create_ai_provider",
+                    provider_name=provider_name,
+                    model_id=ai_model.id,
+                    model_name=ai_model.ai_model_name,
+                    base_url=ai_model.base_url,
+                    api_key_length=len(ai_model.api_key) if ai_model.api_key else 0,
+                    has_api_key=bool(ai_model.api_key)
+                )
                 
                 chat_provider = AIProviderFactory.create_provider(
                     capability=ModelCapability.CHAT,
                     provider_name=provider_name,
-                    model_config=model_config_obj
+                    model_config=model_config
                 )
                 
                 # 构建消息列表
@@ -142,12 +188,16 @@ class OutlineStreamService:
                     {"role": "user", "content": user_prompt}
                 ]
                 
-                # 调用流式chat接口
-                async for chunk in chat_provider.stream_chat(
+                # 调用流式chat接口（使用统一的chat方法，stream=True）
+                # 先await获取异步生成器，然后async for迭代
+                stream_generator = await chat_provider.chat(
                     messages=messages,
                     temperature=temperature,
-                    max_tokens=max_tokens
-                ):
+                    max_tokens=max_tokens,
+                    stream=True
+                )
+                
+                async for chunk in stream_generator:
                     # 累积内容用于后续解析
                     accumulated_content += chunk
 

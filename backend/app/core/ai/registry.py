@@ -15,20 +15,6 @@ def register_all_providers():
     
     logger.info("开始注册所有AI Provider")
     
-    # ===== OpenAI提供商 =====
-    try:
-        from .providers.openai.chat import OpenAIChatProvider
-        from .providers.openai.vision import OpenAIVisionProvider
-        from .providers.openai.dalle import DALLEProvider
-        
-        AIProviderFactory.register(ModelCapability.CHAT, "openai", OpenAIChatProvider)
-        AIProviderFactory.register(ModelCapability.VISION, "openai", OpenAIVisionProvider)
-        AIProviderFactory.register(ModelCapability.IMAGE_GEN, "openai_dalle", DALLEProvider)
-        
-        logger.info("OpenAI Provider注册完成")
-    except ImportError as e:
-        logger.warning(f"OpenAI Provider注册失败: {e}")
-    
     # ===== Gemini提供商 =====
     try:
         from .providers.gemini.chat import GeminiChatProvider
@@ -42,16 +28,6 @@ def register_all_providers():
         logger.info("Gemini Provider注册完成")
     except ImportError as e:
         logger.warning(f"Gemini Provider注册失败: {e}")
-    
-    # ===== Anthropic提供商 =====
-    try:
-        from .providers.anthropic.chat import AnthropicChatProvider
-        
-        AIProviderFactory.register(ModelCapability.CHAT, "anthropic", AnthropicChatProvider)
-        
-        logger.info("Anthropic Provider注册完成")
-    except ImportError as e:
-        logger.warning(f"Anthropic Provider注册失败: {e}")
     
     # ===== 通义千问 =====
     try:

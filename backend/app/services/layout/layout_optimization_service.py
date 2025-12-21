@@ -13,6 +13,7 @@ from app.schemas.layout_optimization import (
 )
 from app.core.ai.factory import AIProviderFactory
 from app.core.ai.models import ModelCapability
+from app.core.ai.config import ModelConfig
 from app.core.log_utils import get_logger
 from app.prompts import get_prompt_manager
 from app.prompts.utils import PromptHelper
@@ -136,14 +137,18 @@ class LayoutOptimizationService:
                 slide_id=slide_id
             )
 
-            # 使用新的统一AI架构
-            provider_name = ai_model_config.get('provider', 'openai_compatible') if ai_model_config else 'openai_compatible'
-            model_config_obj = type('ModelConfig', (), ai_model_config or {})()
+            # 使用新的统一AI架构 - 从前端传来的配置获取provider
+            if ai_model_config:
+                # 优先从provider_mapping获取chat的provider
+                provider_mapping = ai_model_config.get('provider_mapping', {})
+                provider_name = provider_mapping.get('chat') or ai_model_config.get('provider', 'openai_compatible')
+            else:
+                provider_name = 'openai_compatible'
             
             chat_provider = AIProviderFactory.create_provider(
                 capability=ModelCapability.CHAT,
                 provider_name=provider_name,
-                model_config=model_config_obj
+                model_config=ai_model_config or {}
             )
             
             # 构建消息列表
