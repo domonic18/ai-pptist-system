@@ -11,7 +11,8 @@ from app.schemas.layout_optimization import (
     CanvasSize,
     OptimizationOptions
 )
-from app.core.llm.client import AIClient
+from app.core.ai.factory import AIProviderFactory
+from app.core.ai.models import ModelCapability
 from app.core.log_utils import get_logger
 from app.prompts import get_prompt_manager
 from app.prompts.utils import PromptHelper
@@ -25,7 +26,6 @@ class LayoutOptimizationService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.ai_client = AIClient()
         self.prompt_manager = get_prompt_manager()
         self.prompt_helper = PromptHelper(self.prompt_manager)
         self.html_converter = HTMLConverter()
@@ -129,20 +129,37 @@ class LayoutOptimizationService:
                 final_temperature=final_temperature
             )
 
-            # 4. 调用LLM（使用现有AIClient）
+            # 4. 调用LLM（使用新的统一AI架构）
             logger.info(
                 "调用LLM进行HTML布局优化",
                 operation="optimize_layout_llm_call",
                 slide_id=slide_id
             )
 
-            llm_response = await self.ai_client.ai_call(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                temperature=final_temperature,
-                max_tokens=max_tokens,
-                ai_model_config=ai_model_config
+            # 使用新的统一AI架构
+            provider_name = ai_model_config.get('provider', 'openai_compatible') if ai_model_config else 'openai_compatible'
+            model_config_obj = type('ModelConfig', (), ai_model_config or {})()
+            
+            chat_provider = AIProviderFactory.create_provider(
+                capability=ModelCapability.CHAT,
+                provider_name=provider_name,
+                model_config=model_config_obj
             )
+            
+            # 构建消息列表
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+            
+            # 调用chat接口
+            response = await chat_provider.chat(
+                messages=messages,
+                temperature=final_temperature,
+                max_tokens=max_tokens
+            )
+            
+            llm_response = response.get("content", "")
 
             logger.info(
                 "LLM HTML响应接收完成",

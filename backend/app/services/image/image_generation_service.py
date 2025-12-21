@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.ai_model.management_service import ManagementService as AIModelManagementService
 from app.core.log_utils import get_logger
 from app.utils.datetime_utils import get_current_iso_string
-from app.core.imggen.config import ImageGenerationConfig
+from app.core.image_config import ImageGenerationConfig
 
 logger = get_logger(__name__)
 

@@ -11,7 +11,8 @@ from typing import AsyncGenerator, Dict, Any, Optional
 from app.core.log_utils import get_logger
 from app.core.config import settings
 from app.prompts import get_prompt_manager
-from app.core.llm.client import AIClient
+from app.core.ai.factory import AIProviderFactory
+from app.core.ai.models import ModelCapability
 from app.services.generation.stream.common_utils import StreamEventGenerator, StreamJsonParser
 from app.utils import ResponseParser
 from app.prompts import PromptHelper
@@ -26,7 +27,6 @@ class SlidesStreamService:
     def __init__(self):
         """初始化幻灯片流式生成服务"""
         self.prompt_manager = get_prompt_manager()
-        self.ai_service = AIClient()
 
         # 初始化通用工具
         self.stream_events = StreamEventGenerator()
@@ -127,16 +127,31 @@ class SlidesStreamService:
                     language=language,
                     style=style
                 )
-                # AI模式：使用真实的AI服务
+                # AI模式：使用新的统一AI架构
                 accumulated_content = ""
                 generated_slides = []
 
-                async for chunk in self.ai_service.stream_ai_call(
-                    system_prompt=system_prompt,
-                    user_prompt=user_prompt,
+                # 使用新的统一AI架构
+                provider_name = ai_model_config.get('provider', 'openai_compatible') if ai_model_config else 'openai_compatible'
+                model_config_obj = type('ModelConfig', (), ai_model_config or {})()
+                
+                chat_provider = AIProviderFactory.create_provider(
+                    capability=ModelCapability.CHAT,
+                    provider_name=provider_name,
+                    model_config=model_config_obj
+                )
+                
+                # 构建消息列表
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+                
+                # 调用流式chat接口
+                async for chunk in chat_provider.stream_chat(
+                    messages=messages,
                     temperature=temperature,
-                    max_tokens=max_tokens,
-                    ai_model_config=ai_model_config
+                    max_tokens=max_tokens
                 ):
                     # 累积内容
                     accumulated_content += chunk
