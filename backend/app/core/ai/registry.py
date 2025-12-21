@@ -41,15 +41,7 @@ def register_all_providers():
     except ImportError as e:
         logger.warning(f"通义千问 Provider注册失败: {e}")
     
-    # ===== 火山引擎 =====
-    try:
-        from .providers.volcengine_ark.image import VolcengineArkProvider
-        
-        AIProviderFactory.register(ModelCapability.IMAGE_GEN, "volcengine_ark", VolcengineArkProvider)
-        
-        logger.info("火山引擎 Provider注册完成")
-    except ImportError as e:
-        logger.warning(f"火山引擎 Provider注册失败: {e}")
+    # 火山引擎Provider已移除
     
     # ===== Nano Banana =====
     try:
