@@ -165,3 +165,4 @@ class ImageGenerationConfig:
 
         # 如果还是没有找到，返回默认尺寸
         return (settings.image_default_width, settings.image_default_height)
+
