@@ -201,7 +201,6 @@ class OpenAICompatibleChatProvider(BaseChatProvider, MLflowTracingMixin):
 
                 if content:
                     has_content = True
-                    logger.debug(f"接收chunk #{chunk_count}: {len(content)} 字符")
                     yield content
 
             # 记录流处理结果
