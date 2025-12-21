@@ -24,19 +24,19 @@ router = APIRouter(tags=["AI Model Management"])
     "",
     response_model=StandardResponse,
     summary="获取AI模型列表",
-    description="获取所有配置的AI模型列表"
+    description="获取所有配置的AI模型列表（统一架构）"
 )
 async def list_ai_models(
     enabled_only: bool = True,
-    supports_image_generation: Optional[bool] = None,
+    capability: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ) -> StandardResponse:
     """
-    获取AI模型列表
+    获取AI模型列表（统一架构）
 
     Args:
         enabled_only: 是否只返回启用的模型
-        supports_image_generation: 是否只返回支持图片生成的模型（None表示不过滤）
+        capability: 按能力过滤（如 'chat', 'image_gen'等，None表示不过滤）
         db: 数据库会话
 
     Returns:
@@ -46,7 +46,7 @@ async def list_ai_models(
         handler = ManagementHandler(db)
         result = await handler.handle_list_models(
             enabled_only=enabled_only,
-            supports_image_generation=supports_image_generation
+            capability=capability
         )
 
         # 转换为响应模型
@@ -56,7 +56,8 @@ async def list_ai_models(
             "成功获取AI模型列表",
             operation="list_models_success",
             total_models=result["total"],
-            enabled_only=enabled_only
+            enabled_only=enabled_only,
+            capability=capability
         )
 
         return StandardResponse(

@@ -1,19 +1,18 @@
 """
-AI模型配置的Pydantic验证模型
+AI模型配置的Pydantic验证模型（统一架构）
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field, field_validator
 
 
 class AIModelBase(BaseModel):
     """AI模型基础模型"""
     name: str = Field(..., min_length=1, max_length=255, description="模型显示名称")
-    provider: str = Field(..., min_length=1, max_length=100, description="服务提供商")
     ai_model_name: str = Field(..., min_length=1, max_length=255, description="AI模型名称")
     base_url: Optional[str] = Field(None, max_length=512, description="API基础URL")
-    api_key: Optional[str] = Field(None, description="API密钥（加密存储）")
+    api_key: Optional[str] = Field(None, description="API密钥")
 
     model_config = {
         "protected_namespaces": ()
@@ -22,17 +21,18 @@ class AIModelBase(BaseModel):
 
 class AIModelCreate(AIModelBase):
     """创建AI模型请求模型"""
+    # 统一架构：能力和Provider映射
+    capabilities: List[str] = Field(..., min_length=1, description="模型支持的能力列表")
+    provider_mapping: Dict[str, str] = Field(..., description="能力到Provider的映射")
+    
+    # 模型配置
+    parameters: Optional[Dict[str, Any]] = Field(default={}, description="模型参数配置")
+    max_tokens: Optional[int] = Field(8192, description="最大token数")
+    context_window: Optional[int] = Field(16384, description="上下文窗口大小")
+    
+    # 状态管理
     is_enabled: bool = Field(True, description="是否启用")
     is_default: bool = Field(False, description="是否为默认模型")
-    max_tokens: Optional[str] = Field('8192', description="最大token数")
-    context_window: Optional[str] = Field('16384', description="上下文窗口大小")
-    model_settings: Optional[Dict[str, Any]] = Field(None, description="模型特定配置")
-    # 能力配置
-    supports_chat: bool = Field(True, description="是否支持聊天对话")
-    supports_embeddings: bool = Field(False, description="是否支持嵌入")
-    supports_vision: bool = Field(False, description="是否支持视觉")
-    supports_tools: bool = Field(False, description="是否支持工具调用")
-    supports_image_generation: bool = Field(False, description="是否支持图片生成")
 
     model_config = {
         "protected_namespaces": ()
@@ -54,27 +54,55 @@ class AIModelCreate(AIModelBase):
             v = v.strip()
             if v and not (v.startswith('http://') or v.startswith('https://')):
                 raise ValueError("Base URL必须以 http:// 或 https:// 开头")
+        return v
+
+    @field_validator('capabilities')
+    @classmethod
+    def validate_capabilities(cls, v):
+        """验证能力列表"""
+        if not v or len(v) == 0:
+            raise ValueError("至少需要指定一个能力")
+        
+        valid_capabilities = {'chat', 'vision', 'image_gen', 'video_gen', 'embeddings', 'tools', 'code'}
+        for cap in v:
+            if cap not in valid_capabilities:
+                raise ValueError(f"无效的能力: {cap}，有效的能力包括: {', '.join(valid_capabilities)}")
+        
+        return v
+
+    @field_validator('provider_mapping')
+    @classmethod
+    def validate_provider_mapping(cls, v, info):
+        """验证Provider映射"""
+        # 确保所有能力都有对应的Provider
+        if 'capabilities' in info.data:
+            capabilities = info.data['capabilities']
+            for cap in capabilities:
+                if cap not in v:
+                    raise ValueError(f"能力 '{cap}' 缺少Provider映射")
+        
         return v
 
 
 class AIModelUpdate(BaseModel):
     """更新AI模型请求模型"""
     name: Optional[str] = Field(None, min_length=1, max_length=255, description="模型显示名称")
-    provider: Optional[str] = Field(None, min_length=1, max_length=100, description="服务提供商")
     ai_model_name: Optional[str] = Field(None, min_length=1, max_length=255, description="AI模型名称")
     base_url: Optional[str] = Field(None, max_length=512, description="API基础URL")
-    api_key: Optional[str] = Field(None, description="API密钥（加密存储）")
-    max_tokens: Optional[str] = Field(None, description="最大token数")
-    context_window: Optional[str] = Field(None, description="上下文窗口大小")
+    api_key: Optional[str] = Field(None, description="API密钥")
+    
+    # 统一架构：能力和Provider映射
+    capabilities: Optional[List[str]] = Field(None, description="模型支持的能力列表")
+    provider_mapping: Optional[Dict[str, str]] = Field(None, description="能力到Provider的映射")
+    
+    # 模型配置
+    parameters: Optional[Dict[str, Any]] = Field(None, description="模型参数配置")
+    max_tokens: Optional[int] = Field(None, description="最大token数")
+    context_window: Optional[int] = Field(None, description="上下文窗口大小")
+    
+    # 状态管理
     is_enabled: Optional[bool] = Field(None, description="是否启用")
     is_default: Optional[bool] = Field(None, description="是否为默认模型")
-    model_settings: Optional[Dict[str, Any]] = Field(None, description="模型特定配置")
-    # 能力配置
-    supports_chat: Optional[bool] = Field(None, description="是否支持聊天对话")
-    supports_embeddings: Optional[bool] = Field(None, description="是否支持嵌入")
-    supports_vision: Optional[bool] = Field(None, description="是否支持视觉")
-    supports_tools: Optional[bool] = Field(None, description="是否支持工具调用")
-    supports_image_generation: Optional[bool] = Field(None, description="是否支持图片生成")
 
     model_config = {
         "protected_namespaces": ()
@@ -98,21 +126,40 @@ class AIModelUpdate(BaseModel):
             raise ValueError("API密钥不能为空字符串")
         return v
 
+    @field_validator('capabilities')
+    @classmethod
+    def validate_capabilities(cls, v):
+        """验证能力列表"""
+        if v is not None:
+            if len(v) == 0:
+                raise ValueError("至少需要指定一个能力")
+            
+            valid_capabilities = {'chat', 'vision', 'image_gen', 'video_gen', 'embeddings', 'tools', 'code'}
+            for cap in v:
+                if cap not in valid_capabilities:
+                    raise ValueError(f"无效的能力: {cap}")
+        
+        return v
+
 
 class AIModelResponse(AIModelBase):
     """AI模型响应模型"""
     id: str
-    max_tokens: Optional[str]
-    context_window: Optional[str]
+    
+    # 统一架构：能力和Provider映射
+    capabilities: List[str]
+    provider_mapping: Dict[str, str]
+    
+    # 模型配置
+    parameters: Optional[Dict[str, Any]] = {}
+    max_tokens: Optional[int]
+    context_window: Optional[int]
+    
+    # 状态管理
     is_enabled: bool
     is_default: bool
-    model_settings: Optional[Dict[str, Any]] = None
-    # 能力配置
-    supports_chat: bool
-    supports_embeddings: bool
-    supports_vision: bool
-    supports_tools: bool
-    supports_image_generation: bool
+    
+    # 时间戳
     created_at: datetime
     updated_at: datetime
 
@@ -131,8 +178,7 @@ class AIModelListResponse(BaseModel):
 class AIModelSelection(BaseModel):
     """AI模型选择模型"""
     model_id: Optional[str] = Field(None, description="指定的模型ID")
-    provider: Optional[str] = Field(None, description="服务提供商过滤")
-    ai_model_name: Optional[str] = Field(None, description="AI模型名称过滤")
+    capability: Optional[str] = Field(None, description="能力类型过滤")
 
     model_config = {
         "protected_namespaces": ()

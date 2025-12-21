@@ -98,40 +98,119 @@ CREATE TABLE IF NOT EXISTS slide_images (
     UNIQUE(slide_id, image_id)
 );
 
--- 创建AI模型配置表
+-- 创建AI模型配置表（统一架构）
 CREATE TABLE IF NOT EXISTS ai_models (
     -- 基本字段
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    provider VARCHAR(100) NOT NULL,
     ai_model_name VARCHAR(255) NOT NULL,
 
     -- API配置
     base_url VARCHAR(512),
     api_key TEXT NOT NULL,
 
+    -- 统一架构：能力和Provider映射
+    capabilities TEXT[] NOT NULL DEFAULT '{}',
+    provider_mapping JSONB NOT NULL DEFAULT '{}',
+
     -- 模型配置
-    model_settings JSONB,
+    parameters JSONB DEFAULT '{}',
+    max_tokens INTEGER DEFAULT 8192,
+    context_window INTEGER DEFAULT 16384,
 
     -- 状态管理
     is_enabled BOOLEAN DEFAULT TRUE NOT NULL,
     is_default BOOLEAN DEFAULT FALSE NOT NULL,
 
-    -- 能力配置
-    supports_chat BOOLEAN DEFAULT TRUE,
-    supports_embeddings BOOLEAN DEFAULT FALSE,
-    supports_vision BOOLEAN DEFAULT FALSE,
-    supports_tools BOOLEAN DEFAULT FALSE,
-    supports_image_generation BOOLEAN DEFAULT FALSE,
-
-    -- 限制配置
-    max_tokens VARCHAR(20) DEFAULT '8192',
-    context_window VARCHAR(20) DEFAULT '16384',
-
     -- 时间戳
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 创建能力索引（GIN索引用于数组查询）
+CREATE INDEX IF NOT EXISTS idx_ai_models_capabilities ON ai_models USING GIN(capabilities);
+
+-- 创建provider_mapping索引（GIN索引用于JSONB查询）
+CREATE INDEX IF NOT EXISTS idx_ai_models_provider_mapping ON ai_models USING GIN(provider_mapping);
+
+-- 创建视图：带能力标识的模型列表
+CREATE OR REPLACE VIEW v_ai_models_with_capabilities AS
+SELECT 
+    id,
+    name,
+    ai_model_name,
+    base_url,
+    capabilities,
+    provider_mapping,
+    parameters,
+    max_tokens,
+    context_window,
+    is_enabled,
+    is_default,
+    created_at,
+    updated_at,
+    -- 能力标识（便于查询）
+    'chat' = ANY(capabilities) AS has_chat,
+    'vision' = ANY(capabilities) AS has_vision,
+    'image_gen' = ANY(capabilities) AS has_image_gen,
+    'video_gen' = ANY(capabilities) AS has_video_gen,
+    'embeddings' = ANY(capabilities) AS has_embeddings,
+    'tools' = ANY(capabilities) AS has_tools,
+    'code' = ANY(capabilities) AS has_code
+FROM ai_models;
+
+-- 创建函数：根据能力获取模型
+CREATE OR REPLACE FUNCTION get_models_by_capability(capability_name TEXT)
+RETURNS TABLE (
+    id VARCHAR(50),
+    name VARCHAR(255),
+    ai_model_name VARCHAR(255),
+    base_url VARCHAR(512),
+    provider_for_capability TEXT,
+    is_enabled BOOLEAN,
+    is_default BOOLEAN
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        m.id,
+        m.name,
+        m.ai_model_name,
+        m.base_url,
+        m.provider_mapping->>capability_name AS provider_for_capability,
+        m.is_enabled,
+        m.is_default
+    FROM ai_models m
+    WHERE capability_name = ANY(m.capabilities)
+    AND m.is_enabled = TRUE
+    ORDER BY m.is_default DESC, m.name;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 创建函数：获取默认模型
+CREATE OR REPLACE FUNCTION get_default_model_for_capability(capability_name TEXT)
+RETURNS TABLE (
+    id VARCHAR(50),
+    name VARCHAR(255),
+    ai_model_name VARCHAR(255),
+    base_url VARCHAR(512),
+    provider_for_capability TEXT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        m.id,
+        m.name,
+        m.ai_model_name,
+        m.base_url,
+        m.provider_mapping->>capability_name AS provider_for_capability
+    FROM ai_models m
+    WHERE capability_name = ANY(m.capabilities)
+    AND m.is_enabled = TRUE
+    AND m.is_default = TRUE
+    LIMIT 1;
+END;
+$$ LANGUAGE plpgsql;
 
 
 

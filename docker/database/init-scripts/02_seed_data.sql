@@ -103,26 +103,68 @@ WHERE NOT EXISTS (
     SELECT 1 FROM presentations WHERE id = 'pres_002'
 );
 
--- 插入默认模型配置
+-- 插入默认模型配置（统一架构）
+-- 1. OpenAI GPT-4 (对话+多模态)
 INSERT INTO ai_models (
-    id, name, provider, ai_model_name, base_url, api_key_encrypted,
-    is_enabled, is_default, supports_chat, supports_embeddings,
-    supports_vision, supports_tools, max_tokens, context_window
+    id, name, ai_model_name, base_url, api_key,
+    capabilities, provider_mapping,
+    parameters, max_tokens, context_window,
+    is_enabled, is_default
 ) VALUES (
-    'default-openai',
-    'OpenAI GPT-4',
-    'openai',
-    'gpt-4',
-    'https://api.openai.com',
-    'encrypted-api-key-placeholder',
+    'default-openai-gpt4',
+    'OpenAI GPT-4 Turbo',
+    'gpt-4-turbo',
+    'https://api.openai.com/v1',
+    'your-openai-api-key-here',
+    ARRAY['chat', 'vision'],
+    '{"chat": "openai", "vision": "openai"}'::jsonb,
+    '{}'::jsonb,
+    128000,
+    128000,
     TRUE,
+    TRUE
+) ON CONFLICT (id) DO NOTHING;
+
+-- 2. OpenAI DALL-E 3 (文生图)
+INSERT INTO ai_models (
+    id, name, ai_model_name, base_url, api_key,
+    capabilities, provider_mapping,
+    parameters, max_tokens, context_window,
+    is_enabled, is_default
+) VALUES (
+    'default-openai-dalle3',
+    'OpenAI DALL-E 3',
+    'dall-e-3',
+    'https://api.openai.com/v1',
+    'your-openai-api-key-here',
+    ARRAY['image_gen'],
+    '{"image_gen": "openai_dalle"}'::jsonb,
+    '{"quality": "standard", "style": "vivid"}'::jsonb,
+    4000,
+    4000,
     TRUE,
-    TRUE,
+    FALSE
+) ON CONFLICT (id) DO NOTHING;
+
+-- 3. DeepSeek (OpenAI兼容 - 对话)
+INSERT INTO ai_models (
+    id, name, ai_model_name, base_url, api_key,
+    capabilities, provider_mapping,
+    parameters, max_tokens, context_window,
+    is_enabled, is_default
+) VALUES (
+    'deepseek-chat',
+    'DeepSeek Chat',
+    'deepseek-chat',
+    'https://api.deepseek.com/v1',
+    'your-deepseek-api-key-here',
+    ARRAY['chat'],
+    '{"chat": "openai_compatible"}'::jsonb,
+    '{}'::jsonb,
+    8192,
+    32768,
     FALSE,
-    FALSE,
-    FALSE,
-    '8192',
-    '16384'
+    FALSE
 ) ON CONFLICT (id) DO NOTHING;
 
 

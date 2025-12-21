@@ -1,5 +1,5 @@
 """
-AI模型管理业务处理器
+AI模型管理业务处理器（统一架构）
 处理AI模型的CRUD操作
 """
 
@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 
 class ManagementHandler:
-    """AI模型管理业务处理器"""
+    """AI模型管理业务处理器（统一架构）"""
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -23,13 +23,18 @@ class ManagementHandler:
     async def handle_list_models(
         self,
         enabled_only: bool = True,
-        supports_image_generation: Optional[bool] = None
+        capability: Optional[str] = None
     ) -> Dict[str, Any]:
-        """处理获取模型列表请求"""
+        """处理获取模型列表请求
+        
+        Args:
+            enabled_only: 是否只返回启用的模型
+            capability: 按能力过滤（如 'chat', 'image_gen'等）
+        """
         try:
             models = await self.management_service.list_models(
                 enabled_only=enabled_only,
-                supports_image_generation=supports_image_generation
+                capability=capability
             )
 
             return {
@@ -42,7 +47,7 @@ class ManagementHandler:
                 "获取AI模型列表失败",
                 extra={
                     "error": str(e),
-                    "supports_image_generation": supports_image_generation
+                    "capability": capability
                 }
             )
             raise HTTPException(

@@ -1,9 +1,8 @@
 """
-AI模型管理服务
+AI模型管理服务（统一架构）
 处理AI模型的CRUD操作和业务逻辑
 """
 
-import time
 from typing import Optional, Dict, Any, List
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +13,7 @@ logger = get_logger(__name__)
 
 
 class ManagementService:
-    """AI模型管理服务"""
+    """AI模型管理服务（统一架构）"""
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -45,20 +44,16 @@ class ManagementService:
             return {
                 "id": model.id,
                 "name": model.name,
-                "provider": model.provider,
                 "ai_model_name": model.ai_model_name,
                 "base_url": model.base_url,
                 "api_key": model.api_key,
+                "capabilities": model.capabilities or [],
+                "provider_mapping": model.provider_mapping or {},
+                "parameters": model.parameters or {},
                 "max_tokens": model.max_tokens,
+                "context_window": model.context_window,
                 "is_enabled": model.is_enabled,
                 "is_default": model.is_default,
-                "model_settings": model.model_settings or {},
-                # 添加能力字段，用于前端确定模型类型
-                "supports_chat": model.supports_chat,
-                "supports_image_generation": model.supports_image_generation,
-                "supports_embeddings": model.supports_embeddings,
-                "supports_vision": model.supports_vision,
-                "supports_tools": model.supports_tools,
                 "created_at": model.created_at,
                 "updated_at": model.updated_at
             }
@@ -75,13 +70,18 @@ class ManagementService:
     async def list_models(
         self,
         enabled_only: bool = True,
-        supports_image_generation: Optional[bool] = None
+        capability: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """获取模型列表"""
+        """获取模型列表
+        
+        Args:
+            enabled_only: 是否只返回启用的模型
+            capability: 按能力过滤（如 'chat', 'image_gen'等）
+        """
         try:
             models = await self.repository.list_models(
                 enabled_only=enabled_only,
-                supports_image_generation=supports_image_generation
+                capability=capability
             )
             return [self._model_to_dict(model) for model in models]
         except Exception as e:
@@ -89,21 +89,26 @@ class ManagementService:
                 "获取AI模型列表失败",
                 extra={
                     "error": str(e),
-                    "supports_image_generation": supports_image_generation
+                    "capability": capability
                 }
             )
             return []
 
-    async def get_default_model(self) -> Optional[Dict[str, Any]]:
-        """获取默认模型"""
+    async def get_default_model(self, capability: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """获取默认模型
+        
+        Args:
+            capability: 如果指定，返回支持该能力的默认模型
+        """
         try:
-            model = await self.repository.get_default_model()
+            model = await self.repository.get_default_model(capability=capability)
             return self._model_to_dict(model) if model else None
         except Exception as e:
             logger.error(
                 "获取默认AI模型失败",
                 extra={
-                    "error": str(e)
+                    "error": str(e),
+                    "capability": capability
                 }
             )
             return None
@@ -119,21 +124,16 @@ class ManagementService:
             # 创建新模型
             new_model = await self.repository.create_model(
                 name=model_data["name"],
-                provider=model_data["provider"],
                 ai_model_name=model_data["ai_model_name"],
-                base_url=model_data["base_url"],
+                base_url=model_data.get("base_url"),
                 api_key=model_data.get("api_key", ""),
-                max_tokens=model_data.get("max_tokens", "8192"),
-                context_window=model_data.get("context_window", "16384"),
-                model_settings=model_data.get("model_settings", {}),
+                capabilities=model_data.get("capabilities", []),
+                provider_mapping=model_data.get("provider_mapping", {}),
+                parameters=model_data.get("parameters", {}),
+                max_tokens=model_data.get("max_tokens", 8192),
+                context_window=model_data.get("context_window", 16384),
                 is_enabled=model_data.get("is_enabled", True),
-                is_default=model_data.get("is_default", False),
-                # 能力配置字段
-                supports_chat=model_data.get("supports_chat", True),
-                supports_embeddings=model_data.get("supports_embeddings", False),
-                supports_vision=model_data.get("supports_vision", False),
-                supports_tools=model_data.get("supports_tools", False),
-                supports_image_generation=model_data.get("supports_image_generation", False)
+                is_default=model_data.get("is_default", False)
             )
 
             logger.info(
@@ -141,7 +141,7 @@ class ManagementService:
                 extra={
                     "model_id": new_model.id,
                     "model_name": new_model.name,
-                    "provider": new_model.provider
+                    "capabilities": new_model.capabilities
                 }
             )
 
@@ -163,39 +163,22 @@ class ManagementService:
         try:
             # 构建更新字段
             update_fields = {}
-            if "name" in update_data:
-                update_fields["name"] = update_data["name"]
-            if "provider" in update_data:
-                update_fields["provider"] = update_data["provider"]
-            if "ai_model_name" in update_data:
-                update_fields["ai_model_name"] = update_data["ai_model_name"]
-            if "base_url" in update_data:
-                update_fields["base_url"] = update_data["base_url"]
-            if "api_key" in update_data:
-                update_fields["api_key"] = update_data["api_key"]
-            if "max_tokens" in update_data:
-                update_fields["max_tokens"] = update_data["max_tokens"]
-            if "context_window" in update_data:
-                update_fields["context_window"] = update_data["context_window"]
-            if "model_settings" in update_data:
-                update_fields["model_settings"] = update_data["model_settings"]
-            if "is_enabled" in update_data:
-                update_fields["is_enabled"] = update_data["is_enabled"]
-            if "is_default" in update_data:
-                update_fields["is_default"] = update_data["is_default"]
-            # 能力配置字段
-            if "supports_chat" in update_data:
-                update_fields["supports_chat"] = update_data["supports_chat"]
-            if "supports_embeddings" in update_data:
-                update_fields["supports_embeddings"] = update_data["supports_embeddings"]
-            if "supports_vision" in update_data:
-                update_fields["supports_vision"] = update_data["supports_vision"]
-            if "supports_tools" in update_data:
-                update_fields["supports_tools"] = update_data["supports_tools"]
-            if "supports_image_generation" in update_data:
-                update_fields["supports_image_generation"] = update_data["supports_image_generation"]
-
-            # 移除手动设置updated_at，数据库触发器会自动处理
+            
+            # 基本字段
+            for field in ["name", "ai_model_name", "base_url", "api_key"]:
+                if field in update_data:
+                    update_fields[field] = update_data[field]
+            
+            # 统一架构字段
+            for field in ["capabilities", "provider_mapping", "parameters", 
+                         "max_tokens", "context_window"]:
+                if field in update_data:
+                    update_fields[field] = update_data[field]
+            
+            # 状态字段
+            for field in ["is_enabled", "is_default"]:
+                if field in update_data:
+                    update_fields[field] = update_data[field]
 
             # 更新模型
             updated_model = await self.repository.update_model(model_id, **update_fields)
@@ -257,24 +240,19 @@ class ManagementService:
             raise
 
     def _model_to_dict(self, model) -> Dict[str, Any]:
-        """将模型对象转换为字典"""
+        """将模型对象转换为字典（统一架构）"""
         return {
             "id": model.id,
             "name": model.name,
-            "provider": model.provider,
             "ai_model_name": model.ai_model_name,
             "base_url": model.base_url,
+            "capabilities": model.capabilities or [],
+            "provider_mapping": model.provider_mapping or {},
+            "parameters": model.parameters or {},
             "max_tokens": model.max_tokens,
             "context_window": model.context_window,
             "is_enabled": model.is_enabled,
             "is_default": model.is_default,
-            "model_settings": model.model_settings or {},
-            # 能力配置 - 直接使用数据库值，不提供默认值
-            "supports_chat": model.supports_chat,
-            "supports_embeddings": model.supports_embeddings,
-            "supports_vision": model.supports_vision,
-            "supports_tools": model.supports_tools,
-            "supports_image_generation": model.supports_image_generation,
             "created_at": model.created_at,
             "updated_at": model.updated_at
         }
@@ -282,27 +260,26 @@ class ManagementService:
     async def get_supported_image_generation_models(self) -> List[Dict[str, Any]]:
         """
         获取支持图片生成的模型列表
-
+        
         Returns:
             List[Dict[str, Any]]: 支持图片生成的模型列表
         """
         try:
             logger.info("获取支持图片生成的模型列表")
 
-            models = await self.repository.list_models(supports_image_generation=True)
+            models = await self.repository.get_models_by_capability('image_gen')
 
             result = []
             for model in models:
                 result.append({
+                    "id": model.id,
                     "name": model.name,
                     "ai_model_name": model.ai_model_name,
-                    "provider": model.provider,
+                    "provider": model.get_provider_for_capability('image_gen'),
                     "is_enabled": model.is_enabled,
                     "is_default": model.is_default,
                     "base_url": model.base_url,
-                    "max_tokens": model.max_tokens,
-                    "context_window": model.context_window,
-                    "model_settings": model.model_settings or {}
+                    "parameters": model.parameters or {}
                 })
 
             logger.info(f"成功获取 {len(result)} 个支持图片生成的模型")
@@ -321,24 +298,22 @@ class ManagementService:
             # 优先通过name字段查找
             model = await self.repository.get_model_by_name(model_name)
 
-            # 如果找不到，尝试通过model_name字段查找
+            # 如果找不到，尝试通过ai_model_name字段查找
             if not model:
-                all_models = await self.repository.list_models(
-                    supports_image_generation=True
-                )
+                all_models = await self.repository.get_models_by_capability('image_gen')
                 model = next((m for m in all_models if m.ai_model_name == model_name), None)
 
             if not model:
                 logger.error("模型不存在", extra={
                     "model_name": model_name,
-                    "note": "请检查前端传递的model_name是否与数据库中的model_name字段匹配"
+                    "note": "请检查前端传递的model_name是否与数据库中的ai_model_name字段匹配"
                 })
                 return None
 
-            if not model.supports_image_generation:
+            if not model.has_capability('image_gen'):
                 logger.error("模型不支持图片生成", extra={
                     "model_name": model_name,
-                    "provider": model.provider
+                    "capabilities": model.capabilities
                 })
                 return None
 
@@ -346,10 +321,10 @@ class ManagementService:
                 "id": model.id,
                 "name": model.name,
                 "ai_model_name": model.ai_model_name,
-                "provider": model.provider,
+                "provider": model.get_provider_for_capability('image_gen'),
                 "base_url": model.base_url,
                 "api_key": model.api_key,
-                "model_settings": model.model_settings or {}
+                "parameters": model.parameters or {}
             }
 
         except Exception as e:
@@ -357,42 +332,34 @@ class ManagementService:
             return None
 
     def create_image_generation_provider(self, model_config: Dict[str, Any]):
-        """创建图片生成提供商"""
+        """创建图片生成提供商（使用统一架构）"""
         try:
-            from app.core.imggen import ImageProviderFactory
+            from app.core.ai.factory import AIProviderFactory
+            from app.core.ai.models import ModelCapability
 
-            # 映射provider名称到图片生成提供商
-            provider_mapping = {
-                'openai': 'openai',
-                'opencompatible': 'openai_compatible',
-                'gemini': 'gemini',
-                'qwen': 'qwen',
-                'tongyi': 'qwen',
-                'volcengine': 'volcengine_ark',
-                'doubao': 'volcengine_ark',
-                'midjourney': 'midjourney',
-                'stable_diffusion': 'stable_diffusion',
-                'nano_banana': 'nano_banana'
-            }
-
-            image_provider_name = provider_mapping.get(
-                model_config["provider"].lower(), 'openai'
-            )
+            provider_name = model_config.get("provider")
+            if not provider_name:
+                logger.error("模型配置缺少provider字段")
+                return None
 
             # 创建模型配置对象
             config_obj = type('ModelConfig', (), {
                 'name': model_config["ai_model_name"],
-                'provider': image_provider_name,
                 'base_url': model_config["base_url"],
                 'api_key': model_config["api_key"],
-                'model_settings': model_config["model_settings"]
+                'parameters': model_config.get("parameters", {})
             })()
 
-            # 使用提供商工厂创建提供商实例
-            provider = ImageProviderFactory.create_provider(config_obj)
+            # 使用统一的AIProviderFactory创建提供商实例
+            provider = AIProviderFactory.create_provider(
+                capability=ModelCapability.IMAGE_GEN,
+                provider_name=provider_name,
+                model_config=config_obj
+            )
 
             logger.info("图片生成提供商创建成功", extra={
-                "provider_type": type(provider).__name__
+                "provider_type": type(provider).__name__,
+                "provider_name": provider_name
             })
 
             return provider
