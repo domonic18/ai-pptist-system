@@ -152,14 +152,27 @@ class AnalysisService:
         
         # 构建消息列表（包含图片）
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "system", "content": system_prompt}
         ]
-        
+
+        # 添加用户消息（如果有图片，则包含图片数据）
+        if screenshot_data:
+            # 如果有截图，使用多模态格式
+            user_message = {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_prompt},
+                    {"type": "image_url", "image_url": {"url": screenshot_data}}
+                ]
+            }
+            messages.append(user_message)
+        else:
+            # 没有图片，使用纯文本格式
+            messages.append({"role": "user", "content": user_prompt})
+
         # 调用vision接口
-        response = await vision_provider.chat(
+        response = await vision_provider.vision_chat(
             messages=messages,
-            images=[screenshot_data] if screenshot_data else [],
             temperature=temperature,
             max_tokens=max_tokens
         )

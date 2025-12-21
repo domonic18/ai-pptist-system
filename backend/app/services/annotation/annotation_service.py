@@ -31,7 +31,7 @@ class AnnotationService:
         self.redis_client = None  # 延迟初始化
         self.task_manager = TaskManager()
         self.cache_service = CacheService()
-        self.analysis_service = AnalysisService()
+        self.analysis_service = AnalysisService(db)
 
     async def start_annotation(
         self,
