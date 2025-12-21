@@ -206,21 +206,32 @@ class AnalysisService:
                 **raw_result
             }
 
-        # 如果结果包含analysis字段，尝试解析
-        if "analysis" in raw_result:
-            analysis_text = raw_result["analysis"]
+        # 如果结果包含content字段（AI模型的返回内容），尝试解析其中的JSON
+        if "content" in raw_result:
+            content_text = raw_result["content"].strip()
             try:
-                # 尝试从文本中提取JSON
-                json_match = re.search(r'\{.*\}', analysis_text, re.DOTALL)
-                if json_match:
-                    parsed_result = json.loads(json_match.group())
+                # 尝试直接解析为JSON
+                parsed_result = json.loads(content_text)
+                if all(key in parsed_result for key in ["page_type", "layout_type", "element_annotations"]):
                     return {
                         "slide_id": slide_id,
                         "status": "success",
                         **parsed_result
                     }
             except:
-                pass
+                # 如果直接解析失败，尝试提取JSON对象
+                try:
+                    json_match = re.search(r'\{.*\}', content_text, re.DOTALL)
+                    if json_match:
+                        parsed_result = json.loads(json_match.group())
+                        if all(key in parsed_result for key in ["page_type", "layout_type", "element_annotations"]):
+                            return {
+                                "slide_id": slide_id,
+                                "status": "success",
+                                **parsed_result
+                            }
+                except:
+                    pass
 
         # 如果无法解析，返回失败结果
         return {
