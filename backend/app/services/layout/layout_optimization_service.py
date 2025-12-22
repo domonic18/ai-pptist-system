@@ -18,6 +18,7 @@ from app.core.log_utils import get_logger
 from app.prompts import get_prompt_manager
 from app.prompts.utils import PromptHelper
 from app.core.html import HTMLConverter, HTMLParser
+from app.repositories.ai_model import AIModelRepository
 
 logger = get_logger(__name__)
 
@@ -31,6 +32,7 @@ class LayoutOptimizationService:
         self.prompt_helper = PromptHelper(self.prompt_manager)
         self.html_converter = HTMLConverter()
         self.html_parser = HTMLParser()
+        self.ai_model_repo = AIModelRepository(db)
 
     async def optimize_layout(
         self,
@@ -137,18 +139,57 @@ class LayoutOptimizationService:
                 slide_id=slide_id
             )
 
-            # 使用新的统一AI架构 - 从前端传来的配置获取provider
+            # 获取模型配置
+            model_id = None
             if ai_model_config:
-                # 优先从provider_mapping获取chat的provider
-                provider_mapping = ai_model_config.get('provider_mapping', {})
-                provider_name = provider_mapping.get('chat') or ai_model_config.get('provider', 'openai_compatible')
+                model_id = ai_model_config.get('model') or ai_model_config.get('id') or ai_model_config.get('ai_model_id')
+            
+            # 如果提供了ID，从数据库获取完整配置
+            if model_id:
+                ai_model = await self.ai_model_repo.get_model_by_id(model_id)
+                if not ai_model:
+                    logger.warning(f"未找到指定的AI模型: {model_id}，将尝试使用默认模型")
+                    ai_model = await self.ai_model_repo.get_default_model(capability='chat')
             else:
-                provider_name = 'openai_compatible'
+                # 未提供ID，获取默认对话模型
+                ai_model = await self.ai_model_repo.get_default_model(capability='chat')
+
+            if not ai_model:
+                raise ValueError("未找到可用的对话模型配置")
+
+            # 检查模型是否支持chat能力
+            if 'chat' not in (ai_model.capabilities or []):
+                raise ValueError(f"模型不支持对话能力: {ai_model.name}")
+
+            # 获取provider名称
+            provider_mapping = ai_model.provider_mapping or {}
+            provider_name = provider_mapping.get('chat', 'openai_compatible')
+            
+            # 构建模型配置（与新架构兼容）
+            full_model_config = {
+                'id': ai_model.id,
+                'ai_model_name': ai_model.ai_model_name,
+                'base_url': ai_model.base_url,
+                'api_key': ai_model.api_key,
+                'capabilities': ai_model.capabilities,
+                'provider_mapping': ai_model.provider_mapping,
+                'max_tokens': ai_model.max_tokens,
+                'context_window': ai_model.context_window,
+                'parameters': ai_model.parameters or {}
+            }
+
+            logger.info(
+                "创建AI Provider进行布局优化",
+                operation="create_ai_provider",
+                provider_name=provider_name,
+                model_id=ai_model.id,
+                model_name=ai_model.ai_model_name
+            )
             
             chat_provider = AIProviderFactory.create_provider(
                 capability=ModelCapability.CHAT,
                 provider_name=provider_name,
-                model_config=ai_model_config or {}
+                model_config=full_model_config
             )
             
             # 构建消息列表
