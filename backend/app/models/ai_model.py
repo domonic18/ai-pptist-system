@@ -5,8 +5,8 @@ AI模型配置数据模型（统一架构）
 
 from datetime import datetime, timezone
 from typing import Optional, List
-from sqlalchemy import Column, String, Text, Boolean, DateTime, Integer, ARRAY
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Column, String, Text, Boolean, DateTime, Integer
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 
 from app.db.database import Base
 

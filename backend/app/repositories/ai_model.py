@@ -4,7 +4,7 @@ AI模型数据访问层（统一架构）
 
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, and_
+from sqlalchemy import select, delete, and_, any_, func
 
 from app.models.ai_model import AIModel
 from .base import BaseRepository
@@ -41,8 +41,8 @@ class AIModelRepository(BaseRepository):
         if enabled_only:
             conditions.append(AIModel.is_enabled == True)
         if capability:
-            # 使用 ANY 操作符查询数组字段
-            conditions.append(AIModel.capabilities.contains([capability]))
+            # 使用 PostgreSQL ARRAY 的 any 方法检查元素是否存在
+            conditions.append(AIModel.capabilities.any(capability))
         
         if conditions:
             query = query.where(and_(*conditions))
@@ -64,7 +64,8 @@ class AIModelRepository(BaseRepository):
         ]
         
         if capability:
-            conditions.append(AIModel.capabilities.contains([capability]))
+            # 使用 PostgreSQL ARRAY 的 any 方法检查元素是否存在
+            conditions.append(AIModel.capabilities.any(capability))
         
         query = select(AIModel).where(and_(*conditions))
         result = await self.db.execute(query)
@@ -82,7 +83,7 @@ class AIModelRepository(BaseRepository):
         enabled_only: bool = True
     ) -> List[AIModel]:
         """根据能力获取模型列表"""
-        conditions = [AIModel.capabilities.contains([capability])]
+        conditions = [AIModel.capabilities.any(capability)]
         
         if enabled_only:
             conditions.append(AIModel.is_enabled == True)
