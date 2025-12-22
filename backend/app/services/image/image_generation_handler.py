@@ -43,7 +43,7 @@ class ImageGenerationHandler:
                 )
 
             # 提取参数
-            generation_model = request_data.get("generation_model", "dall-e-3")
+            ai_model_id = request_data.get("ai_model_id", "")
             width = request_data.get("width", 1024)
             height = request_data.get("height", 1024)
             quality = request_data.get("quality", "standard")
@@ -54,7 +54,7 @@ class ImageGenerationHandler:
 
             logger.info("处理图片生成请求", extra={
                 "prompt": prompt[:100] + "..." if len(prompt) > 100 else prompt,
-                "generation_model": generation_model,
+                "ai_model_id": ai_model_id,
                 "width": width,
                 "height": height,
                 "ref_images_count": len(ref_images) if ref_images else 0
@@ -63,7 +63,7 @@ class ImageGenerationHandler:
             # 调用服务生成图片
             result = await self.image_generation_service.generate_image(
                 prompt=prompt.strip(),
-                generation_model=generation_model,
+                ai_model_id=ai_model_id,
                 width=width,
                 height=height,
                 quality=quality,

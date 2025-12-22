@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.log_utils import get_logger
-from app.core.redis import redis_client
+from app.core.cache.redis import redis_client
 from app.services.annotation.cache_service import CacheService
 from app.core.ai.factory import AIProviderFactory
 from app.core.ai.models import ModelCapability

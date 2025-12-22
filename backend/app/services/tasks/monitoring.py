@@ -165,7 +165,7 @@ def get_task_history(
     Returns:
         任务历史记录列表
     """
-    from app.core.redis import redis_client
+    from app.core.cache.redis import redis_client
 
     try:
         # 简化任务历史查询 - 通过Celery内置方法

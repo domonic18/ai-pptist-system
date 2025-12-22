@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 from app.core.config import settings
-from app.core.cos import get_cos_config, validate_cos_config
+from app.core.config.cos_config import get_cos_config, validate_cos_config
 from app.core.log_utils import get_logger
 from .base_storage import BaseStorage, UploadResult, DownloadResult, StorageError
 

@@ -149,6 +149,6 @@ class AnnotationService:
     async def _get_redis_client(self) -> Any:
         """获取Redis客户端（延迟初始化）"""
         if self.redis_client is None:
-            from app.core.redis import get_redis
+            from app.core.cache.redis import get_redis
             self.redis_client = await get_redis()
         return self.redis_client

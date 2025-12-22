@@ -11,7 +11,7 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 
 from app.core.log_utils import get_logger
-from app.core.redis import get_redis
+from app.core.cache.redis import get_redis
 
 logger = get_logger(__name__)
 

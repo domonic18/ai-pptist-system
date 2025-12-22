@@ -57,14 +57,24 @@ def register_all_providers():
     try:
         from .providers.openai_compatible.chat import OpenAICompatibleChatProvider
         from .providers.openai_compatible.vision import OpenAICompatibleVisionProvider
-        
+
         AIProviderFactory.register(ModelCapability.CHAT, "openai_compatible", OpenAICompatibleChatProvider)
         AIProviderFactory.register(ModelCapability.VISION, "openai_compatible", OpenAICompatibleVisionProvider)
-        
+
         logger.info("OpenAI兼容 Provider注册完成")
     except ImportError as e:
         logger.warning(f"OpenAI兼容 Provider注册失败: {e}")
-    
+
+    # ===== 硅基流动 =====
+    try:
+        from .providers.siliconflow.image import SiliconFlowImageProvider
+
+        AIProviderFactory.register(ModelCapability.IMAGE_GEN, "siliconflow", SiliconFlowImageProvider)
+
+        logger.info("硅基流动 Provider注册完成")
+    except ImportError as e:
+        logger.warning(f"硅基流动 Provider注册失败: {e}")
+
     logger.info(
         "所有AI Provider注册完成",
         operation="register_all_providers_complete",

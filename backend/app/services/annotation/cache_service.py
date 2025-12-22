@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional, TYPE_CHECKING
 from app.core.log_utils import get_logger
 
 if TYPE_CHECKING:
-    from app.core.redis import RedisClient
+    from app.core.cache.redis import RedisClient
 
 logger = get_logger(__name__)
 
