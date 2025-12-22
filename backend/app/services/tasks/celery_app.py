@@ -42,6 +42,8 @@ celery_app.conf.update(
         "app.services.tasks.refresh_tasks.batch_refresh_url_cache": {"queue": "batch"},
         "app.services.tasks.refresh_tasks.cleanup_expired_cache": {"queue": "maintenance"},
         "app.services.tasks.refresh_tasks.pre_refresh_active_urls": {"queue": "maintenance"},
+        "app.services.tasks.banana_generation_tasks.generate_single_slide_task": {"queue": "banana"},
+        "app.services.tasks.banana_generation_tasks.generate_batch_slides_task": {"queue": "banana"},
     },
 
     # 队列配置
@@ -50,6 +52,7 @@ celery_app.conf.update(
         Queue("quick", routing_key="quick"),
         Queue("batch", routing_key="batch"),
         Queue("maintenance", routing_key="maintenance"),
+        Queue("banana", routing_key="banana"),
         Queue("default", routing_key="default"),
     ),
 

@@ -3,8 +3,16 @@ Prompt工具模块
 提供Prompt相关的工具函数和辅助类
 """
 
+import os
+from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
+import yaml
+from jinja2 import Template
+
 from app.core.config import settings
+from app.core.log_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 class PromptHelper:
@@ -50,3 +58,78 @@ class PromptHelper:
         max_tokens = template_config.get('max_tokens', settings.ai_default_max_tokens)
 
         return system_prompt, user_prompt, temperature, max_tokens
+
+
+def load_prompt_template(template_path: str) -> Template:
+    """
+    加载提示词模板
+
+    Args:
+        template_path: 模板路径（相对于app/prompts/目录）
+
+    Returns:
+        jinja2.Template: 加载的模板对象
+
+    Example:
+        template = load_prompt_template('presentation/banana_image_generation')
+        prompt = template.format(
+            title="AI发展史",
+            points="- AI诞生\n- 深度学习",
+            ppt_title="技术演进",
+            page_index=2,
+            total_pages=10
+        )
+    """
+    try:
+        # 构建完整路径
+        base_dir = Path(__file__).parent.parent
+        file_path = base_dir / "prompts" / f"{template_path}.yml"
+
+        if not file_path.exists():
+            raise FileNotFoundError(f"模板文件不存在: {file_path}")
+
+        # 读取YAML文件
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+
+        # 提取模板内容
+        template_content = data.get('template', '')
+
+        # 创建Jinja2模板
+        template = Template(template_content)
+
+        logger.info(f"成功加载提示词模板: {template_path}")
+
+        return template
+
+    except Exception as e:
+        logger.error(f"加载提示词模板失败: {template_path}, 错误: {e}")
+        # 返回一个空模板，避免程序崩溃
+        return Template("")
+
+
+def load_prompt_template_config(template_path: str) -> Dict[str, Any]:
+    """
+    加载提示词模板配置
+
+    Args:
+        template_path: 模板路径（相对于app/prompts/目录）
+
+    Returns:
+        Dict: 模板配置信息（参数、示例等）
+    """
+    try:
+        base_dir = Path(__file__).parent.parent
+        file_path = base_dir / "prompts" / f"{template_path}.yml"
+
+        if not file_path.exists():
+            raise FileNotFoundError(f"模板文件不存在: {file_path}")
+
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+
+        return data
+
+    except Exception as e:
+        logger.error(f"加载提示词模板配置失败: {template_path}, 错误: {e}")
+        return {}

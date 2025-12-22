@@ -20,6 +20,14 @@ from app.models.banana_generation_task import TaskStatus
 
 logger = get_logger(__name__)
 
+
+# 辅助函数：获取当前用户ID
+def get_current_user_id():
+    """获取当前用户ID（简化版本，实际应从token获取）"""
+    # TODO: 实际项目中应实现用户认证
+    return "user_test_001"
+
+
 router = APIRouter(prefix="/banana_generation", tags=["banana"])
 
 
@@ -364,10 +372,3 @@ async def get_templates(
                 "request_id": str(uuid.uuid4())
             }
         )
-
-
-# 辅助函数：获取当前用户ID
-def get_current_user_id():
-    """获取当前用户ID（简化版本，实际应从token获取）"""
-    # TODO: 实际项目中应实现用户认证
-    return "user_test_001"
