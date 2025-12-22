@@ -57,9 +57,11 @@ def register_all_providers():
     try:
         from .providers.openai_compatible.chat import OpenAICompatibleChatProvider
         from .providers.openai_compatible.vision import OpenAICompatibleVisionProvider
+        from .providers.openai_compatible.image import OpenAICompatibleImageProvider
 
         AIProviderFactory.register(ModelCapability.CHAT, "openai_compatible", OpenAICompatibleChatProvider)
         AIProviderFactory.register(ModelCapability.VISION, "openai_compatible", OpenAICompatibleVisionProvider)
+        AIProviderFactory.register(ModelCapability.IMAGE_GEN, "openai_compatible", OpenAICompatibleImageProvider)
 
         logger.info("OpenAI兼容 Provider注册完成")
     except ImportError as e:
