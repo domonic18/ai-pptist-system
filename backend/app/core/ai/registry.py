@@ -43,15 +43,15 @@ def register_all_providers():
     
     # 火山引擎Provider已移除
     
-    # ===== Nano Banana =====
+    # ===== GenAI (Google) =====
     try:
-        from .providers.nano_banana.image import NanoBananaProvider
+        from .providers.genai.image import GenAIProvider
         
-        AIProviderFactory.register(ModelCapability.IMAGE_GEN, "nano_banana", NanoBananaProvider)
+        AIProviderFactory.register(ModelCapability.IMAGE_GEN, "genai", GenAIProvider)
         
-        logger.info("Nano Banana Provider注册完成")
+        logger.info("GenAI Provider注册完成")
     except ImportError as e:
-        logger.warning(f"Nano Banana Provider注册失败: {e}")
+        logger.warning(f"GenAI Provider注册失败: {e}")
     
     # ===== OpenAI兼容（跨提供商） =====
     try:
