@@ -11,7 +11,7 @@ from app.utils.datetime_utils import get_current_iso_string
 from app.core.ai.factory import AIProviderFactory
 from app.core.ai.models import ModelCapability, ImageGenerationResult
 from app.repositories.ai_model import AIModelRepository
-from app.core.image_config import ImageGenerationConfig
+from app.core.config.image_config import ImageGenerationConfig
 
 logger = get_logger(__name__)
 

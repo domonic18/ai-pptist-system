@@ -5,7 +5,7 @@
 
 from typing import Optional
 from app.core.config import settings
-from app.core.cos import validate_cos_config
+from app.core.config.cos_config import validate_cos_config
 from .base_storage import BaseStorage
 from .cos_storage import COSStorage
 
@@ -23,7 +23,7 @@ def get_storage_service() -> BaseStorage:
         RuntimeError: 当没有可用的存储服务时抛出
     """
     # 优先使用COS存储
-    from app.core.cos import get_cos_config, validate_cos_config
+    from app.core.config.cos_config import get_cos_config, validate_cos_config
     cos_config = get_cos_config()
     if validate_cos_config(cos_config):
         return COSStorage()
