@@ -87,7 +87,8 @@ class GenAIProvider(BaseImageGenProvider, MLflowTracingMixin):
         )
         
         # 模型名称
-        self.model = getattr(model_config, 'ai_model_name', 'gemini-3-pro-image-preview')
+        # 确保使用的是 model_config.model_name
+        self.model = model_config.model_name
         
         logger.info(
             "GenAIProvider初始化成功",
@@ -126,13 +127,6 @@ class GenAIProvider(BaseImageGenProvider, MLflowTracingMixin):
                         base64_data = ref_img.split(',')[1] if ',' in ref_img else ref_img
                         image_data = base64.b64decode(base64_data)
                         processed_images.append(Image.open(io.BytesIO(image_data)))
-                    elif ref_img.startswith('http://') or ref_img.startswith('https://'):
-                        # 这里简单处理，实际上可能需要异步下载
-                        logger.warning(
-                            "URL参考图片需要预先下载，当前跳过",
-                            operation="ref_image_skip_url",
-                            url=ref_img[:100]
-                        )
                     else:
                         # 文件路径
                         processed_images.append(Image.open(ref_img))
