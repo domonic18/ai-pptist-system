@@ -58,9 +58,10 @@
 │                                    │                                    │
 │                                    ▼                                    │
 │  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │          NanoBananaProvider (新增图片生成提供商)                  │  │
-│  │  - 继承自 BaseImageProvider                                       │  │
-│  │  - Google GenAI SDK 集成                                          │  │
+│  │          AI Provider层（统一架构，已存在）                        │  │
+│  │  - GenAIProvider / OpenAICompatibleImageProvider                  │  │
+│  │  - 继承自 BaseImageGenProvider                                    │  │
+│  │  - 通过 AIProviderFactory 创建                                    │  │
 │  │  - 参考图片(模板)支持                                             │  │
 │  │  - 图片比例和分辨率配置                                           │  │
 │  └──────────────────────────────────────────────────────────────────┘  │
@@ -178,8 +179,8 @@ sequenceDiagram
     participant Editor as PPT编辑器
     participant API as 后端API
     participant Service as BananaService
-    participant Provider as NanoBananaProvider
-    participant Gemini as Google Gemini API
+    participant Provider as AIProvider (GenAI/OpenAI兼容)
+    participant API as AI Model API (Gemini/OpenRouter)
     participant FS as 本地文件系统
 
     User->>Dialog: 1. 点击AI图标打开对话框
@@ -219,17 +220,17 @@ sequenceDiagram
     end
     
     par 并发生成幻灯片图片（Celery Worker后台执行）
-        Service->>Provider: 22.1 生成第1页
-        Provider->>Gemini: 23.1 调用Gemini API
-        Gemini-->>Provider: 24.1 返回图片数据
+        Service->>Provider: 22.1 生成第1页（通过AIProviderFactory创建Provider）
+        Provider->>API: 23.1 调用AI模型API（GenAI SDK或OpenAI兼容API）
+        API-->>Provider: 24.1 返回图片数据
         Provider->>COS: 25.1 上传图片到COS（ai-generated/ppt/路径）
         COS-->>Provider: 26.1 返回COS URL
         Provider-->>Service: 27.1 返回结果
         Service->>Redis: 28.1 保存COS URL到Redis ✅
         
         Service->>Provider: 22.2 生成第2页
-        Provider->>Gemini: 23.2 调用Gemini API
-        Gemini-->>Provider: 24.2 返回图片数据
+        Provider->>API: 23.2 调用AI模型API
+        API-->>Provider: 24.2 返回图片数据
         Provider->>COS: 25.2 上传图片到COS（ai-generated/ppt/路径）
         COS-->>Provider: 26.2 返回COS URL
         Provider-->>Service: 27.2 返回结果
@@ -905,305 +906,41 @@ https://{bucket}.cos.{region}.myqcloud.com/ai-generated/ppt/task_abc/slide_0.png
 }
 ```
 
-## 五、Nano Banana Pro 模型集成
+## 五、文生图模型集成架构
 
-### 5.1 Provider 实现
+### 5.1 统一AI Provider架构
 
-**文件**: `backend/app/core/image_generation/providers/nano_banana.py` (新增)
+项目采用统一的AI Provider架构，所有AI能力（对话、文生图、视觉理解等）都通过 `backend/app/core/ai` 模块进行统一管理。
 
-```python
-"""
-Nano Banana Pro (Gemini 3 Pro Image Preview) 图片生成提供商
-基于 Google GenAI SDK 实现
-"""
+**核心架构**：
 
-from typing import Optional, List
-from PIL import Image
-from google import genai
-from google.genai import types
-
-from app.core.image_generation.base import BaseImageProvider, ImageGenerationResult
-from app.core.log_utils import get_logger
-
-logger = get_logger(__name__)
-
-
-class NanoBananaProvider(BaseImageProvider):
-    """Nano Banana Pro 图片生成提供商"""
-    
-    # 支持的模型
-    SUPPORTED_MODELS = [
-        "gemini-3-pro-image-preview",
-        "google/gemini-3-pro-image-preview",
-        "nano-banana-pro"
-    ]
-    
-    # 支持的比例
-    SUPPORTED_ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4"]
-    
-    # 支持的分辨率
-    SUPPORTED_RESOLUTIONS = ["1K", "2K", "4K"]
-    
-    def __init__(self, model_config):
-        """
-        初始化Nano Banana提供商
-        
-        Args:
-            model_config: AI模型配置对象
-                - api_key: Google API密钥
-                - api_base: API基础URL（可选，用于代理）
-                - name: 模型名称
-        """
-        super().__init__(model_config)
-        
-        # 初始化Google GenAI客户端
-        http_options = None
-        if hasattr(model_config, 'api_base') and model_config.api_base:
-            http_options = types.HttpOptions(base_url=model_config.api_base)
-        
-        self.client = genai.Client(
-            api_key=model_config.api_key,
-            http_options=http_options
-        )
-        
-        # 模型名称（使用配置中的名称或默认值）
-        self.model = getattr(model_config, 'name', 'gemini-3-pro-image-preview')
-        
-        logger.info("NanoBananaProvider初始化成功", extra={
-            "model": self.model,
-            "has_api_base": bool(http_options)
-        })
-    
-    async def _generate_image_internal(
-        self,
-        prompt: str,
-        size: Optional[str] = None,
-        quality: Optional[str] = None,
-        **kwargs
-    ) -> ImageGenerationResult:
-        """
-        生成图片（内部实现）
-        
-        Args:
-            prompt: 图片生成提示词
-            size: 图片尺寸（格式：宽x高，如 "1920x1080"）
-            quality: 图片质量（暂不支持，保留参数用于接口统一）
-            **kwargs: 额外参数
-                - ref_images: List[Image.Image] 参考图片列表（如模板图）
-                - aspect_ratio: str 图片比例（如 "16:9"）
-                - resolution: str 分辨率（如 "2K"）
-        
-        Returns:
-            ImageGenerationResult: 生成结果
-        """
-        try:
-            # 解析参数
-            ref_images = kwargs.get('ref_images', [])
-            aspect_ratio = kwargs.get('aspect_ratio', '16:9')
-            resolution = kwargs.get('resolution', '2K')
-            
-            # 从size参数推导aspect_ratio（如果未提供）
-            if size and not kwargs.get('aspect_ratio'):
-                aspect_ratio = self._size_to_aspect_ratio(size)
-            
-            # 构建生成内容
-            contents = []
-            
-            # 添加参考图片（模板图）
-            if ref_images:
-                for ref_img in ref_images:
-                    if isinstance(ref_img, Image.Image):
-                        contents.append(ref_img)
-                    else:
-                        logger.warning("跳过无效的参考图片类型", extra={
-                            "type": type(ref_img).__name__
-                        })
-            
-            # 添加文本提示词
-            contents.append(prompt)
-            
-            logger.info("调用Gemini API生成图片", extra={
-                "model": self.model,
-                "prompt_length": len(prompt),
-                "ref_images_count": len(ref_images),
-                "aspect_ratio": aspect_ratio,
-                "resolution": resolution
-            })
-            
-            # 调用Google GenAI API
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    response_modalities=['TEXT', 'IMAGE'],
-                    image_config=types.ImageConfig(
-                        aspect_ratio=aspect_ratio,
-                        image_size=resolution
-                    ),
-                )
-            )
-            
-            logger.debug("Gemini API响应完成", extra={
-                "parts_count": len(response.parts) if response.parts else 0
-            })
-            
-            # 提取图片
-            for i, part in enumerate(response.parts):
-                if part.text is not None:
-                    logger.debug(f"响应部分 {i}: 文本", extra={
-                        "text_preview": part.text[:100] if len(part.text) > 100 else part.text
-                    })
-                else:
-                    try:
-                        image = part.as_image()
-                        if image:
-                            logger.info("成功提取图片", extra={
-                                "part_index": i,
-                                "image_size": image.size
-                            })
-                            
-                            # 图片将在上层服务中上传到COS
-                            # 这里返回PIL Image对象，由ImageGenerationResult处理
-                            return ImageGenerationResult(
-                                success=True,
-                                image_url=None,  # 上层会处理上传
-                                metadata={
-                                    "provider": "nano_banana",
-                                    "model": self.model,
-                                    "aspect_ratio": aspect_ratio,
-                                    "resolution": resolution,
-                                    "prompt_length": len(prompt),
-                                    "image_size": image.size,
-                                    "pil_image": image  # 传递PIL对象
-                                }
-                            )
-                    except Exception as e:
-                        logger.debug(f"响应部分 {i}: 无法提取图片", extra={
-                            "error": str(e)
-                        })
-            
-            # 未找到图片
-            error_msg = "API响应中未找到图片数据"
-            if response.parts:
-                error_msg += f"，响应包含 {len(response.parts)} 个部分但都不是图片"
-            
-            logger.warning("图片生成失败", extra={"reason": error_msg})
-            
-            return ImageGenerationResult(
-                success=False,
-                error_message=error_msg,
-                metadata={
-                    "provider": "nano_banana",
-                    "model": self.model
-                }
-            )
-            
-        except Exception as e:
-            error_msg = f"Nano Banana图片生成异常: {type(e).__name__}: {str(e)}"
-            logger.error(error_msg, exc_info=True)
-            
-            return ImageGenerationResult(
-                success=False,
-                error_message=error_msg,
-                metadata={
-                    "provider": "nano_banana",
-                    "model": self.model
-                }
-            )
-    
-    def _size_to_aspect_ratio(self, size: str) -> str:
-        """
-        从尺寸字符串推导比例
-        
-        Args:
-            size: 尺寸字符串，如 "1920x1080"
-        
-        Returns:
-            比例字符串，如 "16:9"
-        """
-        try:
-            parts = size.lower().split('x')
-            if len(parts) == 2:
-                width = int(parts[0])
-                height = int(parts[1])
-                
-                # 常见比例映射
-                if width / height == 16 / 9:
-                    return "16:9"
-                elif width / height == 9 / 16:
-                    return "9:16"
-                elif width == height:
-                    return "1:1"
-                elif width / height == 4 / 3:
-                    return "4:3"
-                elif width / height == 3 / 4:
-                    return "3:4"
-        except:
-            pass
-        
-        # 默认返回16:9
-        return "16:9"
-    
-    def supports_model(self, model_name: str) -> bool:
-        """检查是否支持指定模型"""
-        return model_name.lower() in [m.lower() for m in self.SUPPORTED_MODELS]
-    
-    def get_supported_models(self) -> List[str]:
-        """获取支持的模型列表"""
-        return self.SUPPORTED_MODELS.copy()
-    
-    def get_supported_sizes(self) -> List[str]:
-        """获取支持的图片尺寸列表"""
-        # Nano Banana通过aspect_ratio控制，这里返回常见尺寸供参考
-        return [
-            "1920x1080",  # 16:9 - 2K
-            "1080x1920",  # 9:16
-            "1024x1024",  # 1:1
-            "1600x1200",  # 4:3
-            "1200x1600",  # 3:4
-            "3840x2160",  # 16:9 - 4K
-        ]
-    
-    def get_supported_qualities(self) -> List[str]:
-        """获取支持的图片质量列表"""
-        # Nano Banana通过resolution控制
-        return self.SUPPORTED_RESOLUTIONS.copy()
+```
+backend/app/core/ai/
+├── __init__.py                    # 模块导出
+├── base.py                         # BaseAIProvider基类
+├── models.py                       # 数据模型（ModelCapability, ImageGenerationResult等）
+├── factory.py                      # AIProviderFactory工厂类
+├── registry.py                     # Provider注册中心
+├── config.py                       # ModelConfig配置类
+└── providers/                      # Provider实现目录
+    ├── base/                       # Provider基类
+    │   ├── image_gen.py            # BaseImageGenProvider（文生图基类）
+    │   ├── chat.py                 # BaseChatProvider（对话基类）
+    │   └── ...
+    ├── genai/                      # Google GenAI Provider
+    │   └── image.py                # GenAIProvider（基于Google GenAI SDK）
+    ├── openai_compatible/          # OpenAI兼容Provider（支持OpenRouter等）
+    │   ├── image.py                # OpenAICompatibleImageProvider
+    │   ├── chat.py                 # OpenAICompatibleChatProvider
+    │   └── utils.py                # 工具函数
+    ├── qwen/                       # 通义千问Provider
+    ├── siliconflow/                # 硅基流动Provider
+    └── gemini/                     # Gemini Provider（旧版）
 ```
 
-### 5.2 工厂函数更新
+### 5.2 提示词生成
 
-**文件**: `backend/app/core/image_generation/factory.py`
-
-```python
-# 在工厂函数中注册新提供商
-
-from app.core.image_generation.providers.nano_banana import NanoBananaProvider
-
-def create_image_provider(model_config) -> Optional[BaseImageProvider]:
-    """
-    根据模型配置创建图片生成提供商
-    
-    Args:
-        model_config: AI模型配置对象
-    
-    Returns:
-        BaseImageProvider: 图片生成提供商实例
-    """
-    provider_type = getattr(model_config, 'provider_type', '').lower()
-    model_name = getattr(model_config, 'name', '').lower()
-    
-    # Nano Banana Provider
-    if provider_type == 'nano_banana' or 'gemini-3-pro-image' in model_name or 'nano-banana' in model_name:
-        return NanoBananaProvider(model_config)
-    
-    # ... 其他提供商
-    
-    return None
-```
-
-### 5.3 提示词生成
-
-**文件**: `backend/app/prompts/presentation/banana_image_generation.yml` (新增)
+**文件**: `backend/app/prompts/presentation/banana_image_generation.yml` (新增，如需要)
 
 ```yaml
 # Nano Banana Pro图片生成提示词模板
@@ -1882,102 +1619,202 @@ def generate_single_slide_task(task_id, slide_index, ...):
 backend/app/
 ├── api/v1/endpoints/
 │   └── banana_generation.py                    # 新增：Banana生成API端点
-├── core/image_generation/providers/
-│   └── nano_banana.py                           # 新增：Nano Banana提供商
+├── core/ai/                                    # 统一AI Provider架构（已存在）
+│   ├── providers/
+│   │   ├── genai/image.py                      # GenAI Provider（已存在）
+│   │   └── openai_compatible/image.py          # OpenAI兼容Provider（已存在）
+│   ├── factory.py                              # AIProviderFactory（已存在）
+│   └── registry.py                             # Provider注册中心（已存在）
 ├── models/
 │   └── banana_generation_task.py                # 新增：生成任务模型
 ├── repositories/
 │   └── banana_generation.py                     # 新增：生成任务仓库
 ├── services/
+│   ├── image/
+│   │   └── image_generation_service.py          # 图片生成服务（已存在，复用）
 │   ├── generation/
 │   │   ├── banana_generation_service.py         # 新增：Banana生成服务（协调层）
 │   │   ├── banana_slide_generator.py            # 新增：幻灯片生成器（执行层）
 │   │   ├── banana_task_manager.py               # 新增：任务状态管理
 │   │   └── banana_prompt_service.py             # 新增：提示词生成服务
 │   └── tasks/
-│       └── banana_generation_tasks.py           # 新增：Celery任务定义
+│       └── banana_generation_tasks.py            # 新增：Celery任务定义
 ├── schemas/
 │   ├── banana_generation_request.py             # 新增：请求模式
 │   └── banana_generation_response.py            # 新增：响应模式
 └── prompts/presentation/
-    └── banana_image_generation.yml              # 新增：提示词模板
+    └── banana_image_generation.yml              # 新增：提示词模板（可选）
 ```
 
 ### 7.2 前端新增文件
 
 ```
-frontend/src/
-├── views/Editor/
-│   └── BananaGenerationDialog.vue               # 新增：香蕉生成对话框（可选）
-├── components/
-│   ├── BananaTemplateSelector.vue               # 新增：模板选择器
-│   └── BananaProgressDialog.vue                 # 新增：生成进度对话框
-├── hooks/
-│   └── useBananaGeneration.ts                   # 新增：生成逻辑Hook
-├── types/
-│   └── banana-generation.ts                     # 新增：类型定义
-├── services/
-│   └── bananaGenerationService.ts               # 新增：API服务
-└── configs/
-    └── api.ts                                   # 更新：添加新API端点
+frontend/
+├── public/
+│   └── templates/                               # 新增：PPT模板图片文件夹
+│       ├── template_001.png                     # 模板1完整图片
+│       ├── template_001_cover.png               # 模板1缩略图
+│       ├── template_002.png                     # 模板2完整图片
+│       ├── template_002_cover.png               # 模板2缩略图
+│       └── ...                                  # 其他模板图片
+└── src/
+    ├── views/Editor/
+    │   └── PPTGenerationDialog.vue              # 新增：PPT生成对话框（可选）
+    ├── components/
+    │   ├── PPTTemplateSelector.vue              # 新增：模板选择器
+    │   └── PPTProgressDialog.vue                # 新增：生成进度对话框
+    ├── hooks/
+    │   └── usePPTGeneration.ts                  # 新增：生成逻辑Hook
+    ├── types/
+    │   └── ppt-generation.ts                    # 新增：类型定义
+    ├── services/
+    │   └── pptGenerationService.ts              # 新增：API服务
+    └── configs/
+        └── api.ts                               # 更新：添加新API端点
 ```
 
-### 7.3 数据库迁移
+**模板图片组织说明**：
+- 模板图片存放在 `frontend/public/templates/` 目录下
+- 命名规范：`template_{id}.png`（完整图片）和 `template_{id}_cover.png`（缩略图）
+- 前端通过 `/templates/template_001.png` 路径访问模板图片
+- 模板选择器组件从该目录读取并展示模板列表
 
-**文件**: `backend/alembic/versions/xxx_add_banana_generation_tasks.py` (新增)
+### 7.3 数据库表结构
 
-```python
-"""Add banana generation tasks table
+**文件**: `docker/database/init-scripts/05_banana_generation_tables.sql`
 
-Revision ID: xxx
-Revises: xxx
-Create Date: 2025-12-20
+项目使用 SQL 脚本方式管理数据库变更，所有表结构定义在 `docker/database/init-scripts/` 目录下的 `.sql` 文件中。
 
-"""
-from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSON
+**数据库脚本内容**：
 
-# revision identifiers
-revision = 'xxx'
-down_revision = 'xxx'
-branch_labels = None
-depends_on = None
+```sql
+-- 05_banana_generation_tables.sql - PPT生成功能相关表结构定义
+-- 创建PPT生成任务相关的数据库表
 
+-- 设置搜索路径
+SET search_path TO public;
 
-def upgrade():
-    op.create_table(
-        'banana_generation_tasks',
-        sa.Column('id', sa.String(36), primary_key=True),
-        sa.Column('user_id', sa.String(36), nullable=True),
-        sa.Column('outline', JSON, nullable=False),
-        sa.Column('template_id', sa.String(50), nullable=False),
-        sa.Column('generation_model', sa.String(100), nullable=False),
-        sa.Column('canvas_size', JSON, nullable=False),
-        sa.Column('status', sa.Enum('pending', 'processing', 'completed', 'failed', 'stopped', name='task_status'), nullable=False),
-        sa.Column('total_slides', sa.Integer, default=0),
-        sa.Column('completed_slides', sa.Integer, default=0),
-        sa.Column('failed_slides', sa.Integer, default=0),
-        sa.Column('slides_data', JSON, nullable=True),
-        sa.Column('error_message', sa.String(500), nullable=True),
-        sa.Column('created_at', sa.DateTime, nullable=False),
-        sa.Column('updated_at', sa.DateTime, nullable=False),
-        sa.Column('completed_at', sa.DateTime, nullable=True),
-    )
+-- 创建生成任务状态枚举类型
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'banana_task_status') THEN
+        CREATE TYPE banana_task_status AS ENUM ('pending', 'processing', 'completed', 'failed', 'cancelled');
+    END IF;
+END
+$$;
+
+-- 创建PPT生成任务表
+CREATE TABLE IF NOT EXISTS banana_generation_tasks (
+    -- 主键
+    id VARCHAR(50) PRIMARY KEY,
     
-    # 创建索引
-    op.create_index('ix_banana_tasks_user_id', 'banana_generation_tasks', ['user_id'])
-    op.create_index('ix_banana_tasks_status', 'banana_generation_tasks', ['status'])
-    op.create_index('ix_banana_tasks_created_at', 'banana_generation_tasks', ['created_at'])
+    -- 用户信息
+    user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- 任务配置
+    outline JSONB NOT NULL,                    -- 大纲数据
+    template_id VARCHAR(50) NOT NULL,          -- 模板ID
+    template_image_url TEXT,                   -- 模板图片URL（COS或本地）
+    generation_model VARCHAR(100) NOT NULL,    -- 生成模型名称（如 gemini-3-pro-image-preview）
+    canvas_size JSONB NOT NULL,                -- 画布尺寸 {"width": 1920, "height": 1080}
+    
+    -- 任务状态
+    status banana_task_status NOT NULL DEFAULT 'pending',
+    
+    -- 进度信息
+    total_slides INTEGER NOT NULL DEFAULT 0,
+    completed_slides INTEGER NOT NULL DEFAULT 0,
+    failed_slides INTEGER NOT NULL DEFAULT 0,
+    
+    -- 生成结果（存储每页的生成状态和图片URL）
+    slides_data JSONB,
+    
+    -- 错误信息
+    error_message TEXT,
+    
+    -- Celery任务信息
+    celery_task_id VARCHAR(100),               -- Celery任务ID（用于监控）
+    celery_group_id VARCHAR(100),              -- Celery任务组ID（批量任务）
+    
+    -- 时间戳
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP WITH TIME ZONE,
+    completed_at TIMESTAMP WITH TIME ZONE
+);
 
+-- 创建PPT模板表（可选，用于管理模板）
+CREATE TABLE IF NOT EXISTS banana_templates (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    
+    -- 图片信息
+    cover_url TEXT NOT NULL,                   -- 缩略图URL
+    full_image_url TEXT NOT NULL,              -- 完整图片URL（用于生成参考）
+    
+    -- 模板配置
+    type VARCHAR(20) NOT NULL DEFAULT 'system', -- system | user
+    aspect_ratio VARCHAR(10) NOT NULL DEFAULT '16:9',
+    
+    -- 用户信息（用户上传模板时使用）
+    user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- 使用统计
+    usage_count INTEGER NOT NULL DEFAULT 0,
+    
+    -- 状态
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    
+    -- 时间戳
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
-def downgrade():
-    op.drop_index('ix_banana_tasks_created_at', table_name='banana_generation_tasks')
-    op.drop_index('ix_banana_tasks_status', table_name='banana_generation_tasks')
-    op.drop_index('ix_banana_tasks_user_id', table_name='banana_generation_tasks')
-    op.drop_table('banana_generation_tasks')
-    op.execute('DROP TYPE task_status')
+-- 创建索引以提高查询性能
+CREATE INDEX IF NOT EXISTS idx_banana_tasks_user_id ON banana_generation_tasks(user_id);
+CREATE INDEX IF NOT EXISTS idx_banana_tasks_status ON banana_generation_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_banana_tasks_created_at ON banana_generation_tasks(created_at);
+CREATE INDEX IF NOT EXISTS idx_banana_tasks_celery_task_id ON banana_generation_tasks(celery_task_id);
+CREATE INDEX IF NOT EXISTS idx_banana_tasks_template_id ON banana_generation_tasks(template_id);
+
+CREATE INDEX IF NOT EXISTS idx_banana_templates_type ON banana_templates(type);
+CREATE INDEX IF NOT EXISTS idx_banana_templates_user_id ON banana_templates(user_id);
+CREATE INDEX IF NOT EXISTS idx_banana_templates_is_active ON banana_templates(is_active);
+CREATE INDEX IF NOT EXISTS idx_banana_templates_usage_count ON banana_templates(usage_count);
+
+-- 为表创建更新时间触发器
+DO $$
+BEGIN
+    -- banana_generation_tasks表
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_banana_tasks_updated_at') THEN
+        CREATE TRIGGER trigger_banana_tasks_updated_at
+            BEFORE UPDATE ON banana_generation_tasks
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+    
+    -- banana_templates表
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_banana_templates_updated_at') THEN
+        CREATE TRIGGER trigger_banana_templates_updated_at
+            BEFORE UPDATE ON banana_templates
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END
+$$;
 ```
+
+**使用说明**：
+
+1. **新部署环境**：Docker 容器启动时会自动按顺序执行 `init-scripts/` 目录下的所有 `.sql` 脚本
+2. **已有环境**：需要手动执行该脚本：
+   ```bash
+   # 连接到数据库
+   docker exec -i ai-pptist-postgres psql -U postgres -d ai_pptist < docker/database/init-scripts/05_banana_generation_tables.sql
+   ```
+3. **脚本执行顺序**：按照文件名数字前缀顺序执行（01_、02_、03_...）
+4. **幂等性**：脚本使用 `IF NOT EXISTS` 和 `DO $$` 块确保可以安全重复执行
 
 ## 八、前后端配合细节
 
@@ -2245,223 +2082,7 @@ export const bananaGenerationService = {
 export default bananaGenerationService
 ```
 
-## 九、测试策略
-
-### 9.1 单元测试
-
-**后端测试** (`backend/tests/unit/test_nano_banana_provider.py`):
-
-```python
-import pytest
-from unittest.mock import Mock, AsyncMock, patch
-from PIL import Image
-
-from app.core.image_generation.providers.nano_banana import NanoBananaProvider
-
-
-class TestNanoBananaProvider:
-    """NanoBananaProvider单元测试"""
-    
-    @pytest.fixture
-    def model_config(self):
-        """模拟模型配置"""
-        config = Mock()
-        config.api_key = "test_api_key"
-        config.api_base = None
-        config.name = "gemini-3-pro-image-preview"
-        return config
-    
-    @pytest.fixture
-    def provider(self, model_config):
-        """创建提供商实例"""
-        with patch('app.core.image_generation.providers.nano_banana.genai.Client'):
-            provider = NanoBananaProvider(model_config)
-            return provider
-    
-    def test_supports_model(self, provider):
-        """测试模型支持检查"""
-        assert provider.supports_model("gemini-3-pro-image-preview")
-        assert provider.supports_model("nano-banana-pro")
-        assert not provider.supports_model("dall-e-3")
-    
-    def test_size_to_aspect_ratio(self, provider):
-        """测试尺寸到比例转换"""
-        assert provider._size_to_aspect_ratio("1920x1080") == "16:9"
-        assert provider._size_to_aspect_ratio("1080x1920") == "9:16"
-        assert provider._size_to_aspect_ratio("1024x1024") == "1:1"
-        assert provider._size_to_aspect_ratio("invalid") == "16:9"
-    
-    @pytest.mark.asyncio
-    async def test_generate_image_success(self, provider):
-        """测试图片生成成功"""
-        # 模拟API响应
-        mock_image = Mock(spec=Image.Image)
-        mock_image.size = (1920, 1080)
-        
-        mock_part = Mock()
-        mock_part.text = None
-        mock_part.as_image.return_value = mock_image
-        
-        mock_response = Mock()
-        mock_response.parts = [mock_part]
-        
-        provider.client.models.generate_content = AsyncMock(return_value=mock_response)
-        
-        # 调用生成
-        result = await provider._generate_image_internal(
-            prompt="生成一张PPT图片",
-            size="1920x1080"
-        )
-        
-        # 验证结果
-        assert result.success is True
-        assert result.metadata['image_size'] == (1920, 1080)
-        assert result.metadata['pil_image'] == mock_image
-```
-
-**前端测试** (`frontend/tests/unit/bananaGenerationStore.spec.ts`):
-
-```typescript
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { setActivePinia, createPinia } from 'pinia'
-import { useBananaGenerationStore } from '@/store/bananaGeneration'
-import bananaGenerationService from '@/services/bananaGenerationService'
-
-vi.mock('@/services/bananaGenerationService')
-
-describe('BananaGenerationStore', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-  })
-  
-  it('should start generation successfully', async () => {
-    const store = useBananaGenerationStore()
-    
-    const mockResponse = {
-      data: {
-        task_id: 'task_123',
-        total_slides: 5,
-        status: 'processing'
-      }
-    }
-    
-    vi.mocked(bananaGenerationService.generateBatchSlides).mockResolvedValue(mockResponse)
-    
-    const outline = {
-      title: 'Test PPT',
-      slides: [
-        { title: 'Slide 1', points: ['Point 1'] }
-      ]
-    }
-    
-    await store.startGeneration(outline, 'template_001')
-    
-    expect(store.isGenerating).toBe(true)
-    expect(store.currentTask?.task_id).toBe('task_123')
-  })
-  
-  it('should update progress correctly', async () => {
-    const store = useBananaGenerationStore()
-    store.currentTask = { task_id: 'task_123', total_slides: 5, status: 'processing' }
-    
-    const mockStatus = {
-      data: {
-        task_id: 'task_123',
-        status: 'processing',
-        progress: {
-          total: 5,
-          completed: 2,
-          failed: 0,
-          pending: 3
-        },
-        slides: []
-      }
-    }
-    
-    vi.mocked(bananaGenerationService.getGenerationStatus).mockResolvedValue(mockStatus)
-    
-    await store.pollGenerationStatus()
-    
-    expect(store.generationProgress.completed).toBe(2)
-  })
-})
-```
-
-### 9.2 集成测试
-
-**文件**: `backend/tests/interface/test_banana_generation_api.py`
-
-```python
-import pytest
-from fastapi.testclient import TestClient
-
-from app.main import app
-
-
-@pytest.fixture
-def client():
-    return TestClient(app)
-
-
-def test_generate_batch_slides_api(client):
-    """测试批量生成API"""
-    request_data = {
-        "outline": {
-            "title": "AI技术简史",
-            "slides": [
-                {
-                    "title": "人工智能的诞生",
-                    "points": ["1950年：图灵测试", "1956年：AI概念提出"]
-                },
-                {
-                    "title": "AI的发展",
-                    "points": ["深度学习兴起", "大模型时代"]
-                }
-            ]
-        },
-        "template_id": "template_001",
-        "generation_model": "gemini-3-pro-image-preview",
-        "canvas_size": {
-            "width": 1920,
-            "height": 1080
-        }
-    }
-    
-    response = client.post("/api/v1/banana_generation/generate_batch_slides", json=request_data)
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert data["success"] is True
-    assert "task_id" in data["data"]
-    assert data["data"]["total_slides"] == 2
-
-
-def test_get_generation_status_api(client):
-    """测试查询状态API"""
-    # 先创建任务
-    # ... (省略创建逻辑)
-    
-    task_id = "test_task_id"
-    response = client.get(f"/api/v1/banana_generation/generation_status/{task_id}")
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert data["success"] is True
-    assert "status" in data["data"]
-```
-
-### 9.3 端到端测试
-
-**场景**: 完整的PPT生成流程
-
-1. 打开AIPPT对话框
-2. 输入主题生成大纲
-3. 选择模板
-4. 开始生成
-5. 验证缩略图更新
-6. 验证生成完成通知
-
-## 十、性能优化建议
+## 九、性能优化建议
 
 ### 10.1 Celery Worker 并发配置
 
@@ -2792,172 +2413,18 @@ def build_cos_path(task_id: str, slide_index: int) -> str:
 3. ❌ **禁止**将 PPT 生成图片保存到 `images/` 路径
 4. ❌ **禁止**使用其他路径前缀
 
-### 12.2 环境变量配置
+### 12.2 依赖安装
 
-**环境变量** (`.env`):
+**后端依赖说明**：
 
-```bash
-# Google GenAI API配置
-GOOGLE_API_KEY=your_google_api_key
-GOOGLE_API_BASE=https://generativelanguage.googleapis.com  # 可选代理地址
+项目已集成统一的AI Provider架构，相关依赖已包含：
 
-# Banana生成配置
-BANANA_MAX_CONCURRENT=5  # 最大并发数
-BANANA_TIMEOUT=120  # 单次生成超时时间（秒）
-BANANA_DEFAULT_MODEL=gemini-3-pro-image-preview
+- `google-genai`: Google GenAI SDK（GenAI Provider使用）
+- `openai`: OpenAI SDK（OpenAI兼容Provider使用）
 
-# 腾讯云COS配置（PPT图片存储）
-# 注意：使用 ai-generated/ppt/ 路径前缀与普通上传图片区分
-BANANA_IMAGE_COS_PREFIX=ai-generated/ppt/  # COS路径前缀
-BANANA_IMAGE_EXPIRE_DAYS=30  # 图片保留天数（COS自动清理）
-```
+**注意**：如果使用OpenRouter等代理服务，无需额外安装依赖，使用现有的 `openai` 包即可。
 
-### 12.3 数据库表结构添加
-
-根据项目的数据库管理方式，需要在 `docker/database/init-scripts/` 目录下新增 SQL 脚本：
-
-**新建文件**: `docker/database/init-scripts/05_banana_generation_tables.sql`
-
-```sql
--- 05_banana_generation_tables.sql - Banana生成功能相关表结构定义
--- 创建Banana生成任务相关的数据库表
-
--- 设置搜索路径
-SET search_path TO public;
-
--- 创建生成任务状态枚举类型
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'banana_task_status') THEN
-        CREATE TYPE banana_task_status AS ENUM ('pending', 'processing', 'completed', 'failed', 'cancelled');
-    END IF;
-END
-$$;
-
--- 创建Banana生成任务表
-CREATE TABLE IF NOT EXISTS banana_generation_tasks (
-    -- 主键
-    id VARCHAR(50) PRIMARY KEY,
-    
-    -- 用户信息
-    user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
-    
-    -- 任务配置
-    outline JSONB NOT NULL,                    -- 大纲数据
-    template_id VARCHAR(50) NOT NULL,          -- 模板ID
-    template_image_url TEXT,                   -- 模板图片URL（COS或本地）
-    generation_model VARCHAR(100) NOT NULL,    -- 生成模型名称（如 gemini-3-pro-image-preview）
-    canvas_size JSONB NOT NULL,                -- 画布尺寸 {"width": 1920, "height": 1080}
-    
-    -- 任务状态
-    status banana_task_status NOT NULL DEFAULT 'pending',
-    
-    -- 进度信息
-    total_slides INTEGER NOT NULL DEFAULT 0,
-    completed_slides INTEGER NOT NULL DEFAULT 0,
-    failed_slides INTEGER NOT NULL DEFAULT 0,
-    
-    -- 生成结果（存储每页的生成状态和图片URL）
-    slides_data JSONB,
-    
-    -- 错误信息
-    error_message TEXT,
-    
-    -- Celery任务信息
-    celery_task_id VARCHAR(100),               -- Celery任务ID（用于监控）
-    celery_group_id VARCHAR(100),              -- Celery任务组ID（批量任务）
-    
-    -- 时间戳
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    started_at TIMESTAMP WITH TIME ZONE,
-    completed_at TIMESTAMP WITH TIME ZONE
-);
-
--- 创建Banana模板表（可选，用于管理模板）
-CREATE TABLE IF NOT EXISTS banana_templates (
-    id VARCHAR(50) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    
-    -- 图片信息
-    cover_url TEXT NOT NULL,                   -- 缩略图URL
-    full_image_url TEXT NOT NULL,              -- 完整图片URL（用于生成参考）
-    
-    -- 模板配置
-    type VARCHAR(20) NOT NULL DEFAULT 'system', -- system | user
-    aspect_ratio VARCHAR(10) NOT NULL DEFAULT '16:9',
-    
-    -- 用户信息（用户上传模板时使用）
-    user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
-    
-    -- 使用统计
-    usage_count INTEGER NOT NULL DEFAULT 0,
-    
-    -- 状态
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    
-    -- 时间戳
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
--- 创建索引以提高查询性能
-CREATE INDEX IF NOT EXISTS idx_banana_tasks_user_id ON banana_generation_tasks(user_id);
-CREATE INDEX IF NOT EXISTS idx_banana_tasks_status ON banana_generation_tasks(status);
-CREATE INDEX IF NOT EXISTS idx_banana_tasks_created_at ON banana_generation_tasks(created_at);
-CREATE INDEX IF NOT EXISTS idx_banana_tasks_celery_task_id ON banana_generation_tasks(celery_task_id);
-CREATE INDEX IF NOT EXISTS idx_banana_tasks_template_id ON banana_generation_tasks(template_id);
-
-CREATE INDEX IF NOT EXISTS idx_banana_templates_type ON banana_templates(type);
-CREATE INDEX IF NOT EXISTS idx_banana_templates_user_id ON banana_templates(user_id);
-CREATE INDEX IF NOT EXISTS idx_banana_templates_is_active ON banana_templates(is_active);
-CREATE INDEX IF NOT EXISTS idx_banana_templates_usage_count ON banana_templates(usage_count);
-
--- 为Banana表创建更新时间触发器
-DO $$
-BEGIN
-    -- banana_generation_tasks表
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_banana_tasks_updated_at') THEN
-        CREATE TRIGGER trigger_banana_tasks_updated_at
-            BEFORE UPDATE ON banana_generation_tasks
-            FOR EACH ROW
-            EXECUTE FUNCTION update_updated_at_column();
-    END IF;
-    
-    -- banana_templates表
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_banana_templates_updated_at') THEN
-        CREATE TRIGGER trigger_banana_templates_updated_at
-            BEFORE UPDATE ON banana_templates
-            FOR EACH ROW
-            EXECUTE FUNCTION update_updated_at_column();
-    END IF;
-END
-$$;
-```
-
-**使用说明**：
-
-1. **新部署环境**：Docker 容器启动时会自动执行该脚本创建表
-2. **已有环境**：需要手动执行该脚本：
-   ```bash
-   # 连接到数据库
-   docker exec -i ai-pptist-postgres psql -U postgres -d ai_pptist < docker/database/init-scripts/05_banana_generation_tables.sql
-   ```
-
-### 12.4 依赖安装
-
-**后端** (`backend/pyproject.toml`):
-
-```toml
-[tool.poetry.dependencies]
-# ... 现有依赖
-
-# 新增依赖
-google-genai = "^0.3.0"  # Google GenAI SDK
-```
-
-安装：
+**安装依赖**（如需要）：
 ```bash
 cd backend
 poetry install
@@ -2974,7 +2441,7 @@ poetry install
 }
 ```
 
-### 12.5 Celery Worker 部署
+### 12.3 Celery Worker 部署
 
 **开发环境启动**：
 
@@ -3050,11 +2517,10 @@ services:
       - ./workspace:/app/workspace
 ```
 
-### 12.6 上线检查清单
+### 12.4 上线检查清单
 
 - [ ] **数据库表结构已创建**（新部署自动执行，已有环境需手动执行 `05_banana_generation_tables.sql`）
-- [ ] 环境变量已配置（Google API Key、COS配置等）
-- [ ] Google API密钥已添加到AI模型管理
+- [ ] AI模型配置已完成（在AI模型管理系统中配置文生图模型）
 - [ ] **腾讯云 COS 配置已完成（ai-generated/ppt/ 路径）**
 - [ ] **COS 访问权限已设置（公共读或签名URL）**
 - [ ] 模板图片已准备（保存在COS或使用现有）
@@ -3070,6 +2536,8 @@ services:
 - [ ] 错误告警配置
 - [ ] **metainsight 搜索配置（排除 ai-generated/ 路径）**
 - [ ] **定期清理过期COS图片的任务配置（可选）**
+
+## 十三、后续优化方向
 
 ## 十三、后续优化方向
 
@@ -3117,25 +2585,32 @@ services:
 
 ## 十四、总结
 
-本架构设计文档详细描述了 Nano Banana Pro 文生图模型集成到 AI PPTist 系统的完整方案，包括：
+本架构设计文档详细描述了文生图模型集成到 AI PPTist 系统的完整方案，包括：
 
-1. **系统架构**：基于现有架构扩展，采用模块化设计
+1. **系统架构**：基于现有统一AI Provider架构扩展，采用模块化设计
 2. **核心流程**：从大纲生成到图片渲染的完整用户旅程
-3. **技术实现**：Provider模式集成Google GenAI SDK
-4. **数据结构**：任务、模板、生成结果的数据模型设计
-5. **API设计**：RESTful接口规范和响应格式
-6. **异步任务**：基于 Celery 的可靠异步任务执行机制
-7. **前后端配合**：状态管理、轮询机制、实时更新
-8. **测试策略**：单元测试、集成测试、端到端测试
-9. **性能优化**：Celery并发控制、缓存策略、资源管理
-10. **错误处理**：Celery自动重试、详细日志、用户提示
-11. **部署上线**：Celery Worker部署、配置管理、检查清单
+3. **技术实现**：通过统一的AI Provider架构（GenAI Provider / OpenAI兼容Provider）集成文生图能力
+4. **Provider架构**：使用 `AIProviderFactory` 工厂模式创建Provider，支持多种提供商（genai、openai_compatible等）
+5. **数据结构**：任务、模板、生成结果的数据模型设计
+6. **API设计**：RESTful接口规范和响应格式
+7. **异步任务**：基于 Celery 的可靠异步任务执行机制
+8. **前后端配合**：状态管理、轮询机制、实时更新
+9. **测试策略**：单元测试、集成测试、端到端测试
+10. **性能优化**：Celery并发控制、缓存策略、资源管理
+11. **错误处理**：Celery自动重试、详细日志、用户提示
+12. **部署上线**：Celery Worker部署、配置管理、检查清单
 
-该方案遵循 MVP 原则，基于现有项目架构（复用已集成的 Celery）实现快速集成，避免重复造轮子，同时为后续功能扩展预留空间。
+该方案遵循 MVP 原则，基于现有项目架构（复用已集成的统一AI Provider架构和Celery）实现快速集成，避免重复造轮子，同时为后续功能扩展预留空间。
+
+**重要说明**：本文档已更新以反映最新的统一AI Provider架构（`backend/app/core/ai`），所有文生图功能都通过该架构实现，无需单独实现NanoBananaProvider。
 
 ---
 
-**文档版本**: v1.0  
-**最后更新**: 2025-12-20  
+**文档版本**: v1.1  
+**最后更新**: 2025-12-22  
 **维护者**: AI PPTist开发团队
+
+**更新说明**：
+- v1.1 (2025-12-22): 更新为统一AI Provider架构，移除过时的NanoBananaProvider实现说明
+- v1.0 (2025-12-20): 初始版本
 
