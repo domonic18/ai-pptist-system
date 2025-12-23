@@ -54,7 +54,7 @@
         "worker",
         "--loglevel=info",
         "--concurrency=4",
-        "--queues=default,quick,batch,maintenance"
+        "--queues=banana,default,quick,batch,maintenance"
     ],
     "cwd": "${workspaceFolder}/backend",
     "console": "integratedTerminal",
