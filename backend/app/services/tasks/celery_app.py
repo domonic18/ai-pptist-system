@@ -3,8 +3,12 @@
 import os
 from pathlib import Path
 from celery import Celery
+from celery.signals import worker_init
 from kombu import Queue
 from app.core.config import settings
+from app.core.log_utils import get_logger
+
+logger = get_logger(__name__)
 
 # 创建Celery应用
 # 使用不同的Redis数据库索引：db 0 for broker, db 1 for result backend
@@ -14,8 +18,25 @@ celery_app = Celery(
     backend=os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1"),
     include=[
         "app.services.tasks.refresh_tasks",
+        "app.services.tasks.banana_generation_tasks",
     ],
 )
+
+
+@worker_init.connect
+def on_worker_init(**kwargs):
+    """
+    Celery Worker 初始化时执行
+    注册所有 AI Provider，确保 Worker 可以使用图片生成等功能
+    """
+    logger.info("Celery Worker 初始化中，注册 AI Provider...")
+    
+    try:
+        from app.core.ai.registry import register_all_providers
+        register_all_providers()
+        logger.info("AI Provider 注册完成")
+    except Exception as e:
+        logger.error(f"AI Provider 注册失败: {e}")
 
 # Celery配置
 celery_app.conf.update(

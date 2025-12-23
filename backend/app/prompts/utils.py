@@ -72,7 +72,7 @@ def load_prompt_template(template_path: str) -> Template:
 
     Example:
         template = load_prompt_template('presentation/banana_image_generation')
-        prompt = template.format(
+        prompt = template.render(
             title="AI发展史",
             points="- AI诞生\n- 深度学习",
             ppt_title="技术演进",

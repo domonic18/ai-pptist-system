@@ -6,17 +6,13 @@ Banana生成PPT API端点
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 from datetime import datetime
 
 from app.services.generation.banana_generation_service import BananaGenerationService
-from app.services.generation.banana_task_manager import BananaTaskManager
-from app.core.cache.redis import get_redis
 from app.db.database import get_db
-from app.repositories.banana_generation import BananaGenerationRepository
 from app.core.log_utils import get_logger
-from app.core.config import settings
-from app.models.banana_generation_task import TaskStatus
 
 logger = get_logger(__name__)
 
@@ -25,10 +21,10 @@ logger = get_logger(__name__)
 def get_current_user_id():
     """获取当前用户ID（简化版本，实际应从token获取）"""
     # TODO: 实际项目中应实现用户认证
-    return "user_test_001"
+    return "demo_001"
 
 
-router = APIRouter(prefix="/banana_generation", tags=["banana"])
+router = APIRouter(tags=["banana"])
 
 
 # 请求和响应模型（已在frontend中定义，这里添加，因为架构设计说明需要）
@@ -41,8 +37,8 @@ class OutlineData(BaseModel):
 
 class CanvasSize(BaseModel):
     """画布尺寸"""
-    width: int = Field(default=1920, description="画布宽度")
-    height: int = Field(default=1080, description="画布高度")
+    width: float = Field(default=1920, description="画布宽度")
+    height: float = Field(default=1080, description="画布高度")
 
 
 class GenerateBatchSlidesRequest(BaseModel):
@@ -97,6 +93,7 @@ class StopGenerationResponse(BaseModel):
 @router.post("/generate_batch_slides", response_model=Dict[str, Any])
 async def generate_batch_slides(
     request: GenerateBatchSlidesRequest,
+    db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id)
 ):
     """
@@ -122,7 +119,7 @@ async def generate_batch_slides(
             "generation_model": request.generation_model
         })
 
-        service = BananaGenerationService()
+        service = BananaGenerationService(db)
 
         result = await service.generate_batch_slides(
             outline=request.outline.dict(),
@@ -159,7 +156,10 @@ async def generate_batch_slides(
 
 
 @router.get("/generation_status/{task_id}", response_model=Dict[str, Any])
-async def get_generation_status(task_id: str):
+async def get_generation_status(
+    task_id: str,
+    db: AsyncSession = Depends(get_db)
+):
     """
     查询生成任务状态（前端轮询端点）
 
@@ -173,7 +173,7 @@ async def get_generation_status(task_id: str):
         Dict: 包含任务状态、进度、每页详细状态（含COS图片URL）
     """
     try:
-        service = BananaGenerationService()
+        service = BananaGenerationService(db)
 
         status_data = await service.get_generation_status(task_id)
 
@@ -211,7 +211,10 @@ async def get_generation_status(task_id: str):
 
 
 @router.post("/stop_generation/{task_id}", response_model=Dict[str, Any])
-async def stop_generation(task_id: str):
+async def stop_generation(
+    task_id: str,
+    db: AsyncSession = Depends(get_db)
+):
     """
     停止生成任务
 
@@ -224,7 +227,7 @@ async def stop_generation(task_id: str):
         Dict: 停止结果
     """
     try:
-        service = BananaGenerationService()
+        service = BananaGenerationService(db)
 
         result = await service.stop_generation(task_id)
 
@@ -262,6 +265,7 @@ async def stop_generation(task_id: str):
 @router.post("/regenerate_slide", response_model=Dict[str, Any])
 async def regenerate_slide(
     request: dict,
+    db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id)
 ):
     """
@@ -283,7 +287,7 @@ async def regenerate_slide(
         if not task_id or slide_index is None:
             raise ValueError("task_id和slide_index是必填参数")
 
-        service = BananaGenerationService()
+        service = BananaGenerationService(db)
 
         result = await service.regenerate_slide(task_id, slide_index)
 
@@ -322,7 +326,8 @@ async def regenerate_slide(
 @router.get("/templates", response_model=Dict[str, Any])
 async def get_templates(
     type: str = Query(None, description="模板类型: system|user"),
-    aspect_ratio: str = Query(None, description="宽高比: 16:9|4:3")
+    aspect_ratio: str = Query(None, description="宽高比: 16:9|4:3"),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     获取可用模板列表
@@ -337,9 +342,9 @@ async def get_templates(
         Dict: 包含templates数组
     """
     try:
-        service = BananaGenerationService()
+        service = BananaGenerationService(db)
 
-        result = service.get_templates(type=type, aspect_ratio=aspect_ratio)
+        result = await service.get_templates(template_type=type, aspect_ratio=aspect_ratio)
 
         logger.info("获取模板列表", extra={
             "template_count": len(result.get("templates", [])),
