@@ -48,6 +48,10 @@ class BaseAIProvider(ABC):
         """
         pass
     
+    async def close(self):
+        """关闭Provider，释放资源"""
+        pass
+    
     def supports_capability(self, capability: ModelCapability) -> bool:
         """
         检查是否支持某种能力

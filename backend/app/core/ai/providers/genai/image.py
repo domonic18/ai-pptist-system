@@ -101,6 +101,12 @@ class GenAIProvider(BaseImageGenProvider, MLflowTracingMixin):
         """获取Provider名称"""
         return "genai"
     
+    async def close(self):
+        """释放资源"""
+        # Google GenAI SDK 的 Client 目前没有显式的 close 方法
+        # 但我们保留此接口以备将来扩展
+        pass
+    
     def _size_to_aspect_ratio(self, size: str) -> str:
         """将尺寸字符串转换为比例"""
         return self.SIZE_TO_ASPECT_RATIO.get(size, "16:9")

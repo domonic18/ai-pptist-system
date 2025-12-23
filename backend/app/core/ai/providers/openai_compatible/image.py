@@ -54,6 +54,12 @@ class OpenAICompatibleImageProvider(BaseImageGenProvider, MLflowTracingMixin):
         """获取Provider名称"""
         return "openai_compatible"
 
+    async def close(self):
+        """关闭 OpenAI 客户端"""
+        if hasattr(self, 'client') and self.client:
+            await self.client.close()
+            logger.debug("OpenAI 客户端已关闭")
+
     async def generate_image(
         self,
         prompt: str,

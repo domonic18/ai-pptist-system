@@ -22,13 +22,31 @@ class RedisClient:
         self._client = None
         self._connection_pool = None
         self._initialized = False
+        self._loop = None
 
     async def initialize(self) -> None:
         """初始化Redis连接"""
+        # 检查当前事件循环
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
         if self._initialized:
-            return
+            # 如果已经初始化，但事件循环变了，需要重新连接
+            if current_loop and self._loop != current_loop:
+                logger.info("检测到事件循环已更改，重新初始化 Redis 连接")
+                # 同步方式清理旧连接（因为旧 loop 可能已关闭）
+                self._initialized = False
+                self._client = None
+                self._connection_pool = None
+            else:
+                return
 
         try:
+            # 记录当前 loop
+            self._loop = current_loop
+            
             # 延迟导入redis-py，避免启动时依赖问题
             import redis.asyncio as redis
             from redis.asyncio.connection import ConnectionPool
@@ -337,6 +355,5 @@ redis_client = RedisClient()
 
 async def get_redis() -> RedisClient:
     """获取Redis客户端依赖注入"""
-    if not redis_client._initialized:
-        await redis_client.initialize()
+    await redis_client.initialize()
     return redis_client

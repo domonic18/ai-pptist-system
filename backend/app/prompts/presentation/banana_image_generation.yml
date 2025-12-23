@@ -10,15 +10,15 @@ template: |
 
   当前PPT页面的信息如下：
   <page_info>
-  页面标题：{title}
+  页面标题：{{ title }}
 
   页面要点：
-  {points}
+  {{ points }}
   </page_info>
 
   <ppt_context>
-  PPT整体主题：{ppt_title}
-  当前页面位置：第 {page_index} 页 / 共 {total_pages} 页
+  PPT整体主题：{{ ppt_title }}
+  当前页面位置：第 {{ page_index }} 页 / 共 {{ total_pages }} 页
   </ppt_context>
 
   <design_guidelines>
