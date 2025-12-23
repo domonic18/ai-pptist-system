@@ -20,6 +20,12 @@ from app.core.log_utils import get_logger
 from app.models.banana_generation_task import TaskStatus
 from datetime import datetime
 
+from app.prompts import get_prompt_manager
+from app.prompts import PromptHelper
+from app.core.ai.factory import AIProviderFactory
+from app.core.ai.models import ModelCapability
+from app.repositories.ai_model import AIModelRepository
+
 logger = get_logger(__name__)
 
 
@@ -37,6 +43,103 @@ class BananaGenerationService:
         self.repo = BananaGenerationRepository(db)
         self.slide_generator = BananaSlideGenerator()
         self.task_manager = None  # 延迟初始化，需要异步
+        self.prompt_manager = get_prompt_manager()
+        self.prompt_helper = PromptHelper(self.prompt_manager)
+
+    async def split_outline(
+        self,
+        content: str,
+        ai_model_id: str
+    ) -> Dict[str, Any]:
+        """
+        将大纲内容拆分为结构化的PPT页面数据
+        
+        Args:
+            content: 原始Markdown大纲内容
+            ai_model_id: AI模型ID
+            
+        Returns:
+            Dict: 结构化的幻灯片数据 {title, slides: [{title, points}]}
+        """
+        logger.info("开始拆分大纲", extra={"ai_model_id": ai_model_id, "content_len": len(content)})
+        
+        # 1. 获取模型配置
+        ai_model_repo = AIModelRepository(self.db)
+        ai_model = await ai_model_repo.get_model_by_id(ai_model_id)
+        if not ai_model:
+            raise ValueError(f"未找到AI模型: {ai_model_id}")
+        
+        # 构建标准模型配置字典（与项目中其他 Service 保持一致）
+        model_config = {
+            'id': ai_model.id,
+            'ai_model_name': ai_model.ai_model_name,
+            'base_url': ai_model.base_url,
+            'api_key': ai_model.api_key,
+            'capabilities': ai_model.capabilities,
+            'provider_mapping': ai_model.provider_mapping,
+            'max_tokens': ai_model.max_tokens,
+            'context_window': ai_model.context_window,
+            'parameters': ai_model.parameters or {}
+        }
+        
+        # 2. 准备提示词
+        system_prompt, user_prompt, temperature, max_tokens = \
+            self.prompt_helper.prepare_prompts(
+                "presentation",
+                "banana_outline_split",
+                {"content": content},
+                {}
+            )
+            
+        # 3. 调用AI模型
+        provider_mapping = ai_model.provider_mapping or {}
+        provider_name = provider_mapping.get('chat', 'openai_compatible')
+        
+        chat_provider = AIProviderFactory.create_provider(
+            capability=ModelCapability.CHAT,
+            provider_name=provider_name,
+            model_config=model_config
+        )
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        try:
+            # 非流式调用
+            response = await chat_provider.chat(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=False
+            )
+            
+            # 解析结果
+            # response 为字典，需提取 content 字段
+            raw_content = response.get("content", "")
+            
+            # 有些模型可能会返回带有markdown代码块的结果，需要清理
+            content = raw_content.strip()
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+            
+            result = json.loads(content)
+            logger.info("大纲拆分成功", extra={"slides_count": len(result.get("slides", []))})
+            return result
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"解析大纲拆分结果失败: {e}", extra={"content": response})
+            raise ValueError("AI返回了大纲拆分结果，但格式解析失败，请重试")
+        except Exception as e:
+            logger.error(f"大纲拆分失败: {e}")
+            raise e
+        finally:
+            if hasattr(chat_provider, 'close'):
+                await chat_provider.close()
 
     async def generate_batch_slides(
         self,
@@ -80,7 +183,7 @@ class BananaGenerationService:
         
         # 使用 COS 中的模板图片 URL
         template_image_url = template.full_image_url
-        
+
         logger.info("获取模板信息", extra={
             "template_id": template_id,
             "template_image_url": template_image_url
@@ -337,21 +440,32 @@ class BananaGenerationService:
         formatted_templates = []
         for t in templates:
             # 为私有 COS 路径生成预签名 URL
-            cover_url = t.cover_url
-            if cover_url and not cover_url.startswith(('http://', 'https://')):
-                try:
-                    url, _ = await url_service.get_image_url(cover_url)
-                    cover_url = url
-                except Exception as e:
-                    logger.warning(f"为模板 {t.id} 生成封面预签名 URL 失败: {e}")
+            # 兼容处理：Key, 带前导斜杠的 Key, 以及不带签名的全路径 URL
+            async def get_signed_url(url_or_key: str) -> str:
+                if not url_or_key:
+                    return url_or_key
+                
+                is_http = url_or_key.startswith(('http://', 'https://'))
+                is_cos_url = 'myqcloud.com' in url_or_key
+                has_signature = 'q-signature' in url_or_key
+                
+                if not is_http or (is_cos_url and not has_signature):
+                    try:
+                        cos_key = url_or_key
+                        if is_http:
+                            from urllib.parse import urlparse
+                            cos_key = urlparse(url_or_key).path.lstrip('/')
+                        else:
+                            cos_key = url_or_key.lstrip('/')
+                        
+                        url, _ = await url_service.get_image_url(cos_key)
+                        return url
+                    except Exception as e:
+                        logger.warning(f"生成预签名 URL 失败 ({url_or_key}): {e}")
+                return url_or_key
 
-            full_image_url = t.full_image_url
-            if full_image_url and not full_image_url.startswith(('http://', 'https://')):
-                try:
-                    url, _ = await url_service.get_image_url(full_image_url)
-                    full_image_url = url
-                except Exception as e:
-                    logger.warning(f"为模板 {t.id} 生成完整图预签名 URL 失败: {e}")
+            cover_url = await get_signed_url(t.cover_url)
+            full_image_url = await get_signed_url(t.full_image_url)
 
             formatted_templates.append({
                 "id": t.id,

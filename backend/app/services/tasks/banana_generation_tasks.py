@@ -57,7 +57,7 @@ def generate_single_slide_task(
         "slide_index": slide_index,
         "celery_task_id": self.request.id
     })
-    
+
     try:
         return _execute_slide_generation(
             task_id=task_id,
@@ -92,64 +92,64 @@ def _execute_slide_generation(
     from app.core.cache.redis import get_redis
     from app.db.database import AsyncSessionLocal
     from app.services.generation.banana_slide_generator import BananaSlideGenerator
-    
-    cos_url = None
-    result = None
-    
+
     with AsyncRunner() as runner:
-        # 1. 初始化 Redis
-        redis_client = runner.run(get_redis())
-        
-        # 2. 使用数据库会话生成图片
-        async def generate_with_db():
+        async def do_generation():
+            # 1. 初始化 Redis (get_redis 现在会处理 loop 变更)
+            redis_client = await get_redis()
+
+            # 2. 使用数据库会话生成图片
             async with AsyncSessionLocal() as db:
                 generator = BananaSlideGenerator(db=db)
-                return await generator.generate_single_slide(
-                    slide_index=slide_index,
-                    slide_data=slide_data,
-                    template_image_url=template_image_url,
-                    generation_model=generation_model,
-                    canvas_size=canvas_size
-                )
+                try:
+                    # A. 生成图片
+                    result = await generator.generate_single_slide(
+                        slide_index=slide_index,
+                        slide_data=slide_data,
+                        template_image_url=template_image_url,
+                        generation_model=generation_model,
+                        canvas_size=canvas_size
+                    )
+
+                    if not result or 'pil_image' not in result:
+                        raise ValueError("生成结果未包含PIL图像")
+
+                    # B. 上传到腾讯云COS
+                    cos_url = await generator.upload_image_to_cos(
+                        task_id=task_id,
+                        slide_index=slide_index,
+                        image=result['pil_image']
+                    )
+
+                    # C. 更新Redis状态
+                    await generator.update_slide_result_in_redis(
+                        redis_client=redis_client,
+                        task_id=task_id,
+                        slide_index=slide_index,
+                        generation_result=result,
+                        cos_url=cos_url
+                    )
+                    
+                    return cos_url, result
+                finally:
+                    # 显式关闭 generator 以释放 AI Provider 资源（如 httpx 客户端）
+                    # 避免 "Event loop is closed" 错误
+                    await generator.close()
         
-        result = runner.run(generate_with_db())
-        
-        if not result or 'pil_image' not in result:
-            raise ValueError("生成结果未包含PIL图像")
-        
-        # 3. 上传到腾讯云COS（不需要数据库会话）
-        generator = BananaSlideGenerator()
-        cos_url = runner.run(
-            generator.upload_image_to_cos(
-                task_id=task_id,
-                slide_index=slide_index,
-                image=result['pil_image']
-            )
-        )
-        
-        # 4. 更新Redis状态
-        runner.run(
-            generator.update_slide_result_in_redis(
-                redis_client=redis_client,
-                task_id=task_id,
-                slide_index=slide_index,
-                generation_result=result,
-                cos_url=cos_url
-            )
-        )
-    
-    logger.info("幻灯片生成成功", extra={
-        "task_id": task_id,
-        "slide_index": slide_index,
-        "cos_url": cos_url
-    })
-    
-    return {
-        "slide_index": slide_index,
-        "status": "completed",
-        "cos_url": cos_url,
-        "generation_time": result.get("generation_time")
-    }
+        cos_url, result = runner.run(do_generation())
+
+        logger.info("幻灯片生成成功", extra={
+            "task_id": task_id,
+            "slide_index": slide_index,
+            "cos_url": cos_url
+        })
+
+        return {
+            "slide_index": slide_index,
+            "status": "completed",
+            "cos_url": cos_url,
+            "generation_time": result.get("generation_time")
+        }
 
 
 def _handle_generation_error(
@@ -169,7 +169,7 @@ def _handle_generation_error(
         "error": str(error),
         "retry_count": self.request.retries
     })
-    
+
     # 还有重试次数，触发重试
     if self.request.retries < self.max_retries:
         countdown = 5 * (2 ** self.request.retries)  # 指数退避
@@ -191,7 +191,7 @@ def _mark_slide_as_failed(task_id: str, slide_index: int, error: Exception):
         from app.core.cache.redis import get_redis
         from app.services.generation.banana_task_manager import BananaTaskManager
         from app.utils.async_utils import run_async
-        
+
         async def update_failed_status():
             redis_client = await get_redis()
             task_manager = BananaTaskManager(redis_client)
@@ -243,7 +243,7 @@ def generate_batch_slides_task(
         "task_id": task_id,
         "total_slides": len(slides)
     })
-    
+
     try:
         # 1. 创建并行任务组
         job = group(
@@ -257,26 +257,26 @@ def generate_batch_slides_task(
             )
             for i, slide in enumerate(slides)
         )
-        
+
         # 2. 提交任务组到 banana 队列
         group_result = job.apply_async(queue='banana')
         
         # 3. 更新数据库中的任务状态
         _update_task_with_group_id(task_id, group_result.id)
-        
+
         logger.info("批量任务已提交", extra={
             "task_id": task_id,
             "celery_group_id": group_result.id,
             "total_slides": len(slides)
         })
-        
+
         return {
             "task_id": task_id,
             "celery_group_id": group_result.id,
             "total_slides": len(slides),
             "status": "submitted"
         }
-        
+
     except Exception as e:
         logger.error("批量任务提交失败", extra={
             "task_id": task_id,

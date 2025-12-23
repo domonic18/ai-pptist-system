@@ -31,6 +31,16 @@ class BananaSlideGenerator:
         """
         self.db = db
         self.prompt_service = BananaPromptService()
+        self._providers = []  # 记录创建的 provider，以便关闭
+
+    async def close(self):
+        """关闭所有创建的 provider，释放资源"""
+        for provider in self._providers:
+            try:
+                await provider.close()
+            except Exception as e:
+                logger.warning(f"关闭 AI Provider 失败: {e}")
+        self._providers = []
 
     @staticmethod
     def build_cos_path(task_id: str, slide_index: int) -> str:
@@ -145,23 +155,42 @@ class BananaSlideGenerator:
 
             if not image_gen_provider:
                 raise ValueError(f"不支持的模型provider: {provider_name}")
+            
+            # 记录 provider 以便后续关闭
+            self._providers.append(image_gen_provider)
 
-            # 处理模板 URL：如果是 COS Key，生成预签名 URL
+            # 处理模板 URL：如果是 COS Key 或不带签名的 COS URL，生成预签名 URL
             final_template_url = template_image_url
-            if template_image_url and not template_image_url.startswith(('http://', 'https://')):
-                try:
-                    from app.services.cache.image_url_service import get_image_url_service
-                    url_service = await get_image_url_service()
-                    url, _ = await url_service.get_image_url(template_image_url)
-                    final_template_url = url
-                    logger.info("已为参考图生成预签名 URL", extra={
-                        "cos_key": template_image_url,
-                        "url_length": len(url)
-                    })
-                except Exception as e:
-                    logger.error(f"为参考图生成预签名 URL 失败: {e}", extra={
-                        "cos_key": template_image_url
-                    })
+            if template_image_url:
+                is_http = template_image_url.startswith(('http://', 'https://'))
+                is_cos_url = 'myqcloud.com' in template_image_url
+                has_signature = 'q-signature' in template_image_url
+                
+                # 如果是 Key，或者是不带签名的 COS URL，尝试生成预签名 URL
+                if not is_http or (is_cos_url and not has_signature):
+                    try:
+                        from app.services.cache.image_url_service import get_image_url_service
+                        url_service = await get_image_url_service()
+                        
+                        # 提取 Key
+                        cos_key = template_image_url
+                        if is_http:
+                            from urllib.parse import urlparse
+                            path = urlparse(template_image_url).path
+                            cos_key = path.lstrip('/')
+                        else:
+                            cos_key = template_image_url.lstrip('/') # 去掉可能的前导斜杠
+                        
+                        url, _ = await url_service.get_image_url(cos_key)
+                        final_template_url = url
+                        logger.info("已为参考图生成预签名 URL", extra={
+                            "original": template_image_url,
+                            "cos_key": cos_key
+                        })
+                    except Exception as e:
+                        logger.error(f"为参考图生成预签名 URL 失败: {e}", extra={
+                            "cos_key": template_image_url
+                        })
 
             # 准备生成参数
             generation_params = {

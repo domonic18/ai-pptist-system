@@ -85,11 +85,11 @@ class BananaTaskManager:
         # 从Redis获取任务信息（包括总页数）
         task_info_key = f"banana:task:{task_id}:info"
         task_info_str = await self.redis.get(task_info_key)
-        
+
         if not task_info_str:
             logger.warning(f"任务信息未找到: {task_id}")
             return
-        
+
         try:
             task_info = json.loads(task_info_str)
             total_slides = task_info.get("total_slides")

@@ -35,6 +35,12 @@ class OutlineData(BaseModel):
     slides: list[dict] = Field(..., description="幻灯片列表，每个包含title和points")
 
 
+class SplitOutlineRequest(BaseModel):
+    """大纲拆分请求"""
+    content: str = Field(..., description="原始Markdown大纲内容")
+    ai_model_id: str = Field(..., description="用于拆分的AI模型ID")
+
+
 class CanvasSize(BaseModel):
     """画布尺寸"""
     width: float = Field(default=1920, description="画布宽度")
@@ -63,6 +69,7 @@ class SlideGenerationResult(BaseModel):
     title: Optional[str] = Field(None, description="标题")
     status: str = Field(..., description="状态: pending|processing|completed|failed")
     image_url: Optional[str] = Field(None, description="COS图片URL")
+    cos_path: Optional[str] = Field(None, description="COS存储路径")
     generation_time: Optional[float] = Field(None, description="生成耗时(秒)")
     error: Optional[str] = Field(None, description="错误信息")
 
@@ -89,6 +96,59 @@ class StopGenerationResponse(BaseModel):
 
 
 # API端点实现
+
+@router.post("/split_outline", response_model=Dict[str, Any])
+async def split_outline(
+    request: SplitOutlineRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    将Markdown大纲拆分为结构化的幻灯片数据
+    
+    Args:
+        request: 包含原始大纲内容和模型ID的请求
+        
+    Returns:
+        Dict: 结构化的幻灯片数据 {title, slides: [{title, points}]}
+    """
+    try:
+        logger.info("收到大纲拆分请求", extra={
+            "content_len": len(request.content),
+            "ai_model_id": request.ai_model_id
+        })
+
+        service = BananaGenerationService(db)
+        result = await service.split_outline(
+            content=request.content,
+            ai_model_id=request.ai_model_id
+        )
+
+        return {
+            "success": True,
+            "data": result,
+            "error": None,
+            "timestamp": datetime.utcnow().isoformat(),
+            "request_id": str(uuid.uuid4())
+        }
+
+    except Exception as e:
+        logger.error("大纲拆分失败", extra={
+            "error": str(e),
+            "ai_model_id": request.ai_model_id
+        })
+
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "data": None,
+                "error": {"message": str(e), "code": "OUTLINE_SPLIT_FAILED"},
+                "timestamp": datetime.utcnow().isoformat(),
+                "request_id": str(uuid.uuid4())
+            }
+        )
+
 
 @router.post("/generate_batch_slides", response_model=Dict[str, Any])
 async def generate_batch_slides(
