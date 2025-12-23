@@ -4,13 +4,17 @@ Banana幻灯片生成器
 """
 
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from PIL import Image
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.ai.factory import AIProviderFactory
+from app.core.ai.models import ModelCapability
 from app.services.generation.banana_task_manager import BananaTaskManager
+from app.services.generation.banana_prompt_service import BananaPromptService
+from app.repositories.ai_model import AIModelRepository
 from app.core.config import settings
 from app.core.log_utils import get_logger
-from .banana_prompt_service import BananaPromptService
 
 logger = get_logger(__name__)
 
@@ -18,8 +22,14 @@ logger = get_logger(__name__)
 class BananaSlideGenerator:
     """Banana幻灯片图片生成器"""
 
-    def __init__(self):
-        """初始化生成器"""
+    def __init__(self, db: AsyncSession = None):
+        """
+        初始化生成器
+        
+        Args:
+            db: 数据库会话（可选，用于查询模型配置）
+        """
+        self.db = db
         self.prompt_service = BananaPromptService()
 
     @staticmethod
@@ -43,7 +53,7 @@ class BananaSlideGenerator:
         slide_data: Dict[str, Any],
         template_image_url: str,
         generation_model: str,
-        canvas_size: Dict[str, int]
+        canvas_size: Dict[str, float]
     ) -> Dict[str, Any]:
         """
         生成单张幻灯片图片
@@ -52,7 +62,7 @@ class BananaSlideGenerator:
             slide_index: 幻灯片索引
             slide_data: 幻灯片数据（包含title和points）
             template_image_url: 模板图片URL
-            generation_model: 生成模型名称
+            generation_model: AI模型ID（用于从数据库获取配置）
             canvas_size: 画布尺寸 {width, height}
 
         Returns:
@@ -61,7 +71,8 @@ class BananaSlideGenerator:
         start_time = time.time()
         logger.info("开始生成幻灯片图片", extra={
             "slide_index": slide_index,
-            "slide_title": slide_data.get("title")
+            "slide_title": slide_data.get("title"),
+            "generation_model": generation_model
         })
 
         try:
@@ -79,31 +90,78 @@ class BananaSlideGenerator:
                 "prompt_length": len(prompt)
             })
 
-            # 2. 调用AI Provider生成图片
-            factory = AIProviderFactory()
-            provider = factory.get_provider(generation_model)
+            # 2. 从数据库获取模型配置
+            if not self.db:
+                raise ValueError("数据库会话未初始化，无法获取模型配置")
+            
+            ai_model_repo = AIModelRepository(self.db)
+            ai_model = await ai_model_repo.get_model_by_id(generation_model)
+            
+            if not ai_model:
+                raise ValueError(f"未找到AI模型: {generation_model}")
+            
+            if not ai_model.is_enabled:
+                raise ValueError(f"AI模型已禁用: {ai_model.name}")
+            
+            # 检查模型是否支持图片生成能力
+            if 'image_gen' not in (ai_model.capabilities or []):
+                raise ValueError(f"模型不支持图片生成能力: {ai_model.name}")
+            
+            # 获取provider名称
+            provider_mapping = ai_model.provider_mapping or {}
+            provider_name = provider_mapping.get('image_gen')
+            
+            if not provider_name:
+                raise ValueError(f"模型未配置图片生成provider: {ai_model.name}")
+            
+            # 构建模型配置
+            model_config = {
+                'id': ai_model.id,
+                'model_id': ai_model.id,
+                'model_name': ai_model.ai_model_name,
+                'name': ai_model.name,
+                'ai_model_name': ai_model.ai_model_name,
+                'base_url': ai_model.base_url,
+                'api_key': ai_model.api_key,
+                'capabilities': ai_model.capabilities,
+                'provider_mapping': ai_model.provider_mapping,
+                'max_tokens': ai_model.max_tokens,
+                'context_window': ai_model.context_window,
+                'parameters': ai_model.parameters or {}
+            }
 
-            if not provider:
-                raise ValueError(f"无法找到指定的AI模型: {generation_model}")
+            logger.info("创建AI图片生成Provider", extra={
+                "provider_name": provider_name,
+                "model_id": ai_model.id,
+                "model_name": ai_model.ai_model_name
+            })
+
+            # 3. 使用AIProviderFactory创建provider
+            image_gen_provider = AIProviderFactory.create_provider(
+                capability=ModelCapability.IMAGE_GEN,
+                provider_name=provider_name,
+                model_config=model_config
+            )
+
+            if not image_gen_provider:
+                raise ValueError(f"不支持的模型provider: {provider_name}")
 
             # 准备生成参数
             generation_params = {
                 "prompt": prompt,
-                "width": canvas_size["width"],
-                "height": canvas_size["height"],
-                "size": f"{canvas_size['width']}x{canvas_size['height']}",
+                "width": int(canvas_size["width"]),
+                "height": int(canvas_size["height"]),
                 "ref_images": [template_image_url],  # 使用模板作为参考图片
-                "model": generation_model
             }
 
             logger.info("调用AI Provider生成图片", extra={
-                "provider_type": provider.__class__.__name__,
-                "model": generation_model,
+                "provider_type": image_gen_provider.__class__.__name__,
+                "model": ai_model.ai_model_name,
                 "canvas_size": canvas_size
             })
 
-            # 3. 执行图片生成
-            result = await provider.generate_image(**generation_params)
+            # 4. 执行图片生成
+            result = await image_gen_provider.generate_image(**generation_params)
 
             if not result or not result.image:
                 raise Exception("图片生成失败：返回结果为空")

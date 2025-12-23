@@ -78,19 +78,28 @@ class BananaTaskManager:
     async def _update_task_progress(self, task_id: str):
         """
         更新任务总进度（聚合所有页面状态）（前端轮询时的数据源）
+        
+        Args:
+            task_id: 任务ID
         """
-        # 从PostgreSQL获取任务信息（总页数等）
-        from app.db.database import get_db
-        from app.models.banana_generation_task import BananaGenerationTask
-
-        db = next(get_db())
-        task = db.query(BananaGenerationTask).filter(BananaGenerationTask.id == task_id).first()
-
-        if not task:
-            logger.warning(f"任务未找到: {task_id}")
+        # 从Redis获取任务信息（包括总页数）
+        task_info_key = f"banana:task:{task_id}:info"
+        task_info_str = await self.redis.get(task_info_key)
+        
+        if not task_info_str:
+            logger.warning(f"任务信息未找到: {task_id}")
             return
-
-        total_slides = task.total_slides
+        
+        try:
+            task_info = json.loads(task_info_str)
+            total_slides = task_info.get("total_slides")
+            
+            if total_slides is None:
+                logger.warning(f"任务信息中缺少total_slides: {task_id}")
+                return
+        except json.JSONDecodeError as e:
+            logger.error(f"无法解析任务信息: {task_id}, 错误: {e}")
+            return
 
         # 查询所有幻灯片的状态
         slides_data = []

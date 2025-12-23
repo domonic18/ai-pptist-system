@@ -38,8 +38,8 @@ class BananaPromptService:
         # 格式化要点列表
         points_str = "\n".join([f"- {point}" for point in points])
 
-        # 使用模板生成提示词
-        prompt = self.template.format(
+        # 使用Jinja2模板渲染提示词
+        prompt = self.template.render(
             title=title,
             points=points_str,
             ppt_title=ppt_title,

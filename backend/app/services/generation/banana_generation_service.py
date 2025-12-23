@@ -4,12 +4,17 @@ Banana生成服务（Facade层）
 """
 
 import uuid
+import json
 from typing import Dict, Any, Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.services.generation.banana_slide_generator import BananaSlideGenerator
 from app.services.generation.banana_task_manager import BananaTaskManager
-from app.services.tasks.banana_generation_tasks import generate_batch_slides_task
+from app.services.tasks.banana_generation_tasks import (
+    generate_batch_slides_task,
+    generate_single_slide_task,
+)
 from app.repositories.banana_generation import BananaGenerationRepository
-from app.db.database import get_db
 from app.core.cache.redis import get_redis
 from app.core.log_utils import get_logger
 from app.models.banana_generation_task import TaskStatus
@@ -21,8 +26,15 @@ logger = get_logger(__name__)
 class BananaGenerationService:
     """Banana生成服务（门面模式）"""
 
-    def __init__(self):
-        """初始化服务"""
+    def __init__(self, db: AsyncSession):
+        """
+        初始化服务
+        
+        Args:
+            db: 数据库会话
+        """
+        self.db = db
+        self.repo = BananaGenerationRepository(db)
         self.slide_generator = BananaSlideGenerator()
         self.task_manager = None  # 延迟初始化，需要异步
 
@@ -31,7 +43,7 @@ class BananaGenerationService:
         outline: Dict[str, Any],
         template_id: str,
         generation_model: str,
-        canvas_size: Dict[str, int],
+        canvas_size: Dict[str, float],
         user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -50,9 +62,6 @@ class BananaGenerationService:
         task_id = f"banana_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
         # 1. 创建任务记录
-        db = next(get_db())
-        repo = BananaGenerationRepository(db)
-
         # 准备幻灯片数据
         slides = outline.get("slides", [])
         total_slides = len(slides)
@@ -60,30 +69,24 @@ class BananaGenerationService:
         if total_slides == 0:
             raise ValueError("大纲中没有幻灯片数据")
 
-        # 获取模板图片URL
-        template = repo.get_template(template_id)
+        # 从数据库获取模板信息（模板图片存储在 COS）
+        template = await self.repo.get_template(template_id)
         if not template:
-            # 如果没有模板，提取模板ID编号部分，然后从预定义模板中获取
-            try:
-                template_num = template_id.replace('template_', '')
-                template_image_url = f"/templates/template_{template_num}.png"
-                cover_url = f"/templates/template_{template_num}_cover.png"
+            raise ValueError(
+                f"模板未找到: {template_id}。"
+                f"请先运行初始化脚本将模板上传到 COS: "
+                f"python -m scripts.init_banana_templates"
+            )
+        
+        # 使用 COS 中的模板图片 URL
+        template_image_url = template.full_image_url
+        
+        logger.info("获取模板信息", extra={
+            "template_id": template_id,
+            "template_image_url": template_image_url
+        })
 
-                # 创建模板记录（如果不存在）
-                template = repo.create_template(
-                    template_id=template_id,
-                    name=f"模板{template_num}",
-                    cover_url=cover_url,
-                    full_image_url=template_image_url,
-                    type="system"
-                )
-            except Exception as e:
-                logger.warning(f"无法解析模板ID: {template_id}, 使用默认模板")
-                template_image_url = "/templates/template_001.png"
-        else:
-            template_image_url = template.full_image_url
-
-        task = repo.create_task(
+        task = await self.repo.create_task(
             task_id=task_id,
             outline=outline,
             template_id=template_id,
@@ -93,6 +96,9 @@ class BananaGenerationService:
             total_slides=total_slides,
             user_id=user_id
         )
+
+        # 增加模板使用次数
+        await self.repo.increment_template_usage(template_id)
 
         # 格式化幻灯片数据
         formatted_slides = []
@@ -119,14 +125,28 @@ class BananaGenerationService:
         )
 
         # 更新任务with Celery信息
-        repo.update_task_status(
+        await self.repo.update_task_status(
             task_id=task_id,
             status=TaskStatus.PROCESSING,
             celery_task_id=celery_result.id
         )
 
-        # 增加模板使用次数
-        repo.increment_template_usage(template_id)
+        # 将任务信息保存到Redis，供Celery worker使用
+        redis_client = await get_redis()
+        task_info_key = f"banana:task:{task_id}:info"
+        task_info = {
+            "task_id": task_id,
+            "total_slides": total_slides,
+            "template_id": template_id,
+            "generation_model": generation_model,
+            "canvas_size": canvas_size,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        await redis_client.set(
+            task_info_key,
+            json.dumps(task_info),
+            expire=3600
+        )
 
         logger.info("批量生成任务已提交", extra={
             "task_id": task_id,
@@ -152,16 +172,14 @@ class BananaGenerationService:
             Dict: 包含进度和每个幻灯片的状态
         """
         if not self.task_manager:
-            redis_client = get_redis()
+            redis_client = await get_redis()
             self.task_manager = BananaTaskManager(redis_client)
 
         progress_data = await self.task_manager.get_task_progress(task_id)
 
-        if not progress_data or progress_data.get("total", 0) == 0:
+        if progress_data is None or progress_data.get("total", 0) == 0:
             # 从数据库获取任务信息
-            db = next(get_db())
-            repo = BananaGenerationRepository(db)
-            task = repo.get_task(task_id)
+            task = await self.repo.get_task(task_id)
 
             if not task:
                 return {
@@ -196,38 +214,40 @@ class BananaGenerationService:
         Returns:
             Dict: 停止结果
         """
-        db = next(get_db())
-        repo = BananaGenerationRepository(db)
-        task = repo.get_task(task_id)
+        task = await self.repo.get_task(task_id)
 
         if not task:
             raise ValueError(f"任务未找到: {task_id}")
 
         # 更新任务状态为取消
-        repo.update_task_status(
+        await self.repo.update_task_status(
             task_id=task_id,
             status=TaskStatus.CANCELLED
         )
 
+        completed_slides = task.completed_slides
+        total_slides = task.total_slides
+        celery_group_id = task.celery_group_id
+
         # 如果有Celery任务ID，尝试取消
-        if task.celery_group_id:
+        if celery_group_id:
             try:
                 from celery import Celery
                 celery = Celery()
-                celery.control.revoke(task.celery_group_id, terminate=True)
+                celery.control.revoke(celery_group_id, terminate=True)
             except Exception as e:
                 logger.warning(f"取消Celery任务失败: {e}")
 
         logger.info("停止Banana生成任务", extra={
             "task_id": task_id,
-            "celery_group_id": getattr(task, 'celery_group_id', None)
+            "celery_group_id": celery_group_id
         })
 
         return {
             "task_id": task_id,
             "status": "stopped",
-            "completed_slides": task.completed_slides if task else 0,
-            "total_slides": task.total_slides if task else 0
+            "completed_slides": completed_slides,
+            "total_slides": total_slides
         }
 
     async def regenerate_slide(
@@ -245,9 +265,7 @@ class BananaGenerationService:
         Returns:
             Dict: 重新生成结果
         """
-        db = next(get_db())
-        repo = BananaGenerationRepository(db)
-        task = repo.get_task(task_id)
+        task = await self.repo.get_task(task_id)
 
         if not task:
             raise ValueError(f"任务未找到: {task_id}")
@@ -268,15 +286,19 @@ class BananaGenerationService:
             'total_pages': task.total_slides
         })
 
+        template_image_url = task.template_image_url
+        generation_model = task.generation_model
+        canvas_size = task.canvas_size
+
         # 提交单个幻灯片生成任务
         result = generate_single_slide_task.apply_async(
             kwargs={
                 "task_id": task_id,
                 "slide_index": slide_index,
                 "slide_data": slide_data,
-                "template_image_url": task.template_image_url,
-                "generation_model": task.generation_model,
-                "canvas_size": task.canvas_size
+                "template_image_url": template_image_url,
+                "generation_model": generation_model,
+                "canvas_size": canvas_size
             },
             queue="banana"
         )
@@ -292,7 +314,7 @@ class BananaGenerationService:
             "celery_task_id": result.id
         }
 
-    def get_templates(
+    async def get_templates(
         self,
         type: Optional[str] = None,
         aspect_ratio: Optional[str] = None
@@ -307,10 +329,7 @@ class BananaGenerationService:
         Returns:
             Dict: 模板列表
         """
-        db = next(get_db())
-        repo = BananaGenerationRepository(db)
-
-        templates = repo.get_templates(type=type, aspect_ratio=aspect_ratio)
+        templates = await self.repo.get_templates(type=type, aspect_ratio=aspect_ratio)
 
         return {
             "templates": [

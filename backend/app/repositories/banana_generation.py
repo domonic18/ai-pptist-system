@@ -4,28 +4,29 @@ Banana生成任务仓库
 """
 
 from typing import List, Optional, Dict, Any
-from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import select, desc, func, and_
 from app.models.banana_generation_task import BananaGenerationTask, BananaTemplate, TaskStatus
+from app.repositories.base import BaseRepository
 from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)
 
 
-class BananaGenerationRepository:
+class BananaGenerationRepository(BaseRepository):
     """Banana生成任务仓库"""
 
-    def __init__(self, db: Session):
-        self.db = db
+    @property
+    def model(self):
+        return BananaGenerationTask
 
-    def create_task(
+    async def create_task(
         self,
         task_id: str,
         outline: Dict[str, Any],
         template_id: str,
         template_image_url: str,
         generation_model: str,
-        canvas_size: Dict[str, int],
+        canvas_size: Dict[str, float],
         total_slides: int,
         user_id: Optional[str] = None
     ) -> BananaGenerationTask:
@@ -61,8 +62,8 @@ class BananaGenerationRepository:
         )
 
         self.db.add(task)
-        self.db.commit()
-        self.db.refresh(task)
+        await self.db.commit()
+        await self.db.refresh(task)
 
         logger.info("创建Banana生成任务", extra={
             "task_id": task_id,
@@ -72,7 +73,7 @@ class BananaGenerationRepository:
 
         return task
 
-    def get_task(self, task_id: str) -> Optional[BananaGenerationTask]:
+    async def get_task(self, task_id: str) -> Optional[BananaGenerationTask]:
         """
         获取任务详情
 
@@ -82,11 +83,13 @@ class BananaGenerationRepository:
         Returns:
             BananaGenerationTask: 任务对象，如果不存在返回None
         """
-        return self.db.query(BananaGenerationTask).filter(
+        query = select(BananaGenerationTask).filter(
             BananaGenerationTask.id == task_id
-        ).first()
+        )
+        result = await self.db.execute(query)
+        return result.scalars().first()
 
-    def update_task_status(
+    async def update_task_status(
         self,
         task_id: str,
         status: TaskStatus,
@@ -107,7 +110,7 @@ class BananaGenerationRepository:
         Returns:
             BananaGenerationTask: 更新后的任务对象，如果不存在返回None
         """
-        task = self.get_task(task_id)
+        task = await self.get_task(task_id)
         if not task:
             logger.warning(f"任务未找到: {task_id}")
             return None
@@ -128,8 +131,8 @@ class BananaGenerationRepository:
         elif status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
             task.completed_at = datetime.utcnow()
 
-        self.db.commit()
-        self.db.refresh(task)
+        await self.db.commit()
+        await self.db.refresh(task)
 
         logger.info("更新任务状态", extra={
             "task_id": task_id,
@@ -139,7 +142,7 @@ class BananaGenerationRepository:
 
         return task
 
-    def update_task_progress(
+    async def update_task_progress(
         self,
         task_id: str,
         completed_slides: int,
@@ -156,7 +159,7 @@ class BananaGenerationRepository:
         Returns:
             BananaGenerationTask: 更新后的任务对象
         """
-        task = self.get_task(task_id)
+        task = await self.get_task(task_id)
         if not task:
             return None
 
@@ -170,12 +173,12 @@ class BananaGenerationRepository:
         elif completed_slides > 0 or failed_slides > 0:
             task.status = TaskStatus.PROCESSING
 
-        self.db.commit()
-        self.db.refresh(task)
+        await self.db.commit()
+        await self.db.refresh(task)
 
         return task
 
-    def update_slides_data(
+    async def update_slides_data(
         self,
         task_id: str,
         slides_data: Dict[str, Any]
@@ -190,17 +193,17 @@ class BananaGenerationRepository:
         Returns:
             BananaGenerationTask: 更新后的任务对象
         """
-        task = self.get_task(task_id)
+        task = await self.get_task(task_id)
         if not task:
             return None
 
         task.slides_data = slides_data
-        self.db.commit()
-        self.db.refresh(task)
+        await self.db.commit()
+        await self.db.refresh(task)
 
         return task
 
-    def get_user_tasks(
+    async def get_user_tasks(
         self,
         user_id: str,
         limit: int = 50,
@@ -217,13 +220,16 @@ class BananaGenerationRepository:
         Returns:
             List[BananaGenerationTask]: 任务列表
         """
-        return self.db.query(BananaGenerationTask).filter(
+        query = select(BananaGenerationTask).filter(
             BananaGenerationTask.user_id == user_id
         ).order_by(
             desc(BananaGenerationTask.created_at)
-        ).limit(limit).offset(offset).all()
+        ).limit(limit).offset(offset)
+        
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
 
-    def get_active_tasks_count(self, user_id: Optional[str] = None) -> int:
+    async def get_active_tasks_count(self, user_id: Optional[str] = None) -> int:
         """
         获取活跃的生成任务数量
 
@@ -233,7 +239,7 @@ class BananaGenerationRepository:
         Returns:
             int: 活跃任务数量
         """
-        query = self.db.query(BananaGenerationTask).filter(
+        query = select(func.count(BananaGenerationTask.id)).where(  # type: ignore
             BananaGenerationTask.status.in_([
                 TaskStatus.PENDING,
                 TaskStatus.PROCESSING
@@ -243,16 +249,17 @@ class BananaGenerationRepository:
         if user_id:
             query = query.filter(BananaGenerationTask.user_id == user_id)
 
-        return query.count()
+        result = await self.db.execute(query)
+        return result.scalar() or 0
 
     # Template methods
-    def create_template(
+    async def create_template(
         self,
         template_id: str,
         name: str,
         cover_url: str,
         full_image_url: str,
-        type: str = "system",
+        template_type: str = "system",
         aspect_ratio: str = "16:9",
         description: Optional[str] = None,
         user_id: Optional[str] = None
@@ -265,7 +272,7 @@ class BananaGenerationRepository:
             name: 模板名称
             cover_url: 缩略图URL
             full_image_url: 完整图片URL
-            type: 模板类型（system|user）
+            template_type: 模板类型（system|user）
             aspect_ratio: 宽高比
             description: 描述
             user_id: 用户ID（用户上传时使用）
@@ -279,14 +286,14 @@ class BananaGenerationRepository:
             description=description,
             cover_url=cover_url,
             full_image_url=full_image_url,
-            type=type,
+            type=template_type,
             aspect_ratio=aspect_ratio,
             user_id=user_id
         )
 
         self.db.add(template)
-        self.db.commit()
-        self.db.refresh(template)
+        await self.db.commit()
+        await self.db.refresh(template)
 
         logger.info("创建Banana模板", extra={
             "template_id": template_id,
@@ -296,7 +303,7 @@ class BananaGenerationRepository:
 
         return template
 
-    def get_template(self, template_id: str) -> Optional[BananaTemplate]:
+    async def get_template(self, template_id: str) -> Optional[BananaTemplate]:
         """
         获取模板详情
 
@@ -306,14 +313,18 @@ class BananaGenerationRepository:
         Returns:
             BananaTemplate: 模板对象，如果不存在返回None
         """
-        return self.db.query(BananaTemplate).filter(
-            BananaTemplate.id == template_id,
-            BananaTemplate.is_active == True
-        ).first()
+        query = select(BananaTemplate).filter(
+            and_(
+                BananaTemplate.id == template_id,
+                BananaTemplate.is_active == True
+            )
+        )
+        result = await self.db.execute(query)
+        return result.scalars().first()
 
-    def get_templates(
+    async def get_templates(
         self,
-        type: Optional[str] = None,
+        template_type: Optional[str] = None,
         aspect_ratio: Optional[str] = None,
         limit: int = 100
     ) -> List[BananaTemplate]:
@@ -321,28 +332,31 @@ class BananaGenerationRepository:
         获取模板列表
 
         Args:
-            type: 模板类型（system|user）
+            template_type: 模板类型（system|user）
             aspect_ratio: 宽高比（16:9|4:3）
             limit: 返回数量限制
 
         Returns:
             List[BananaTemplate]: 模板列表
         """
-        query = self.db.query(BananaTemplate).filter(
+        query = select(BananaTemplate).filter(
             BananaTemplate.is_active == True
         )
 
-        if type:
-            query = query.filter(BananaTemplate.type == type)
+        if template_type:
+            query = query.filter(BananaTemplate.type == template_type)
         if aspect_ratio:
             query = query.filter(BananaTemplate.aspect_ratio == aspect_ratio)
 
-        return query.order_by(
+        query = query.order_by(
             desc(BananaTemplate.usage_count),
             desc(BananaTemplate.created_at)
-        ).limit(limit).all()
+        ).limit(limit)
 
-    def increment_template_usage(self, template_id: str) -> bool:
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def increment_template_usage(self, template_id: str) -> bool:
         """
         增加模板使用次数
 
@@ -352,16 +366,16 @@ class BananaGenerationRepository:
         Returns:
             bool: 是否成功
         """
-        template = self.get_template(template_id)
+        template = await self.get_template(template_id)
         if not template:
             return False
 
         template.usage_count += 1
-        self.db.commit()
+        await self.db.commit()
 
         return True
 
-    def delete_template(self, template_id: str) -> bool:
+    async def delete_template(self, template_id: str) -> bool:
         """
         删除模板（软删除）
 
@@ -371,12 +385,12 @@ class BananaGenerationRepository:
         Returns:
             bool: 是否成功
         """
-        template = self.get_template(template_id)
+        template = await self.get_template(template_id)
         if not template:
             return False
 
         template.is_active = False
-        self.db.commit()
+        await self.db.commit()
 
         logger.info("删除Banana模板", extra={
             "template_id": template_id
