@@ -141,9 +141,12 @@ class OpenAICompatibleImageProvider(BaseImageGenProvider, MLflowTracingMixin):
             # 1. 优先从 images 字段提取（OpenRouter 标准格式）
             image_data = self._extract_image_from_message(message)
             if image_data:
+                image_url = self._prepare_image_url(image_data)
+                pil_image = self._get_pil_image(image_url)
                 return ImageGenerationResult(
                     success=True,
-                    image_url=self._prepare_image_url(image_data),
+                    image_url=image_url,
+                    image=pil_image,
                     metadata={"model": self.model, "method": "chat_images_field"}
                 )
 
@@ -152,17 +155,22 @@ class OpenAICompatibleImageProvider(BaseImageGenProvider, MLflowTracingMixin):
             image_url_match = re.search(r'!\[.*?\]\((https?://[^\)]+)\)', content_text)
             if image_url_match:
                 image_url = image_url_match.group(1)
+                pil_image = self._get_pil_image(image_url)
                 return ImageGenerationResult(
                     success=True,
                     image_url=image_url,
+                    image=pil_image,
                     metadata={"model": self.model, "method": "chat_markdown"}
                 )
             
             # 3. 兼容：检查 content 本身是否为 base64 编码的图片
             if len(content_text) > 500 and self._is_base64(content_text[:100]):
+                image_url = self._prepare_image_url(content_text)
+                pil_image = self._get_pil_image(image_url)
                 return ImageGenerationResult(
                     success=True,
-                    image_url=self._prepare_image_url(content_text),
+                    image_url=image_url,
+                    image=pil_image,
                     metadata={"model": self.model, "method": "chat_content_base64"}
                 )
             
@@ -207,9 +215,12 @@ class OpenAICompatibleImageProvider(BaseImageGenProvider, MLflowTracingMixin):
             )
             
             if response.data and response.data[0].url:
+                image_url = response.data[0].url
+                pil_image = self._get_pil_image(image_url)
                 return ImageGenerationResult(
                     success=True,
-                    image_url=response.data[0].url,
+                    image_url=image_url,
+                    image=pil_image,
                     metadata={"model": self.model, "method": "standard_api"}
                 )
             
@@ -219,6 +230,69 @@ class OpenAICompatibleImageProvider(BaseImageGenProvider, MLflowTracingMixin):
             error_msg = handle_openai_exception(e, self.client.base_url)
             logger.error("标准API生成图片失败", operation="openai_standard_image_error", error=str(e))
             return ImageGenerationResult(success=False, error_message=error_msg)
+
+    def _is_base64(self, s: str) -> bool:
+        """检查字符串是否可能是 base64 编码"""
+        if not s or not isinstance(s, str):
+            return False
+        # base64 字符集：A-Z, a-z, 0-9, +, /, =
+        return bool(re.match(r'^[A-Za-z0-9+/]*={0,2}$', s))
+
+    def _download_image_content(self, url: str) -> Optional[bytes]:
+        """
+        从 HTTP URL 下载图片内容
+        
+        Args:
+            url: 图片 URL
+            
+        Returns:
+            Optional[bytes]: 图片字节数据，失败返回 None
+        """
+        import httpx
+        try:
+            logger.info(
+                "下载图片",
+                operation="download_image",
+                url=url[:100] if len(url) > 100 else url
+            )
+            
+            with httpx.Client(timeout=30.0) as client:
+                response = client.get(url)
+                response.raise_for_status()
+                
+                if len(response.content) < 100:
+                    logger.warning(f"下载的图片数据过小: {len(response.content)} bytes")
+                    return None
+                    
+                return response.content
+        except Exception as e:
+            logger.error(f"下载图片失败: {e}", url=url[:100] if len(url) > 100 else url)
+            return None
+
+    def _get_pil_image(self, data: str) -> Optional[Image.Image]:
+        """
+        将图片数据（URL 或 base64）转换为 PIL Image 对象
+        """
+        try:
+            if data.startswith('http'):
+                content = self._download_image_content(data)
+                return Image.open(io.BytesIO(content)) if content else None
+            elif data.startswith('data:image'):
+                base64_data = data.split(',')[1] if ',' in data else data
+                return Image.open(io.BytesIO(base64.b64decode(base64_data)))
+            elif self._is_base64(data):
+                return Image.open(io.BytesIO(base64.b64decode(data)))
+            return None
+        except Exception as e:
+            logger.error(f"转换 PIL Image 失败: {e}")
+            return None
+
+    def _download_and_encode_image(self, url: str) -> Optional[str]:
+        """
+        从 HTTP URL 下载图片并转换为 base64
+        """
+        content = self._download_image_content(url)
+        return base64.b64encode(content).decode() if content else None
 
     def _process_image_to_base64(self, img: Any) -> Optional[str]:
         """将图片对象转换为 base64 字符串"""
@@ -231,8 +305,8 @@ class OpenAICompatibleImageProvider(BaseImageGenProvider, MLflowTracingMixin):
                 if img.startswith('data:image'):
                     return img.split(',')[1] if ',' in img else img
                 elif img.startswith('http'):
-                    # 暂时不支持下载 URL 图片再上传，除非必要
-                    return None
+                    # 下载 HTTP URL 图片并转换为 base64
+                    return self._download_and_encode_image(img)
                 else:
                     # 假设是文件路径
                     with open(img, "rb") as image_file:
@@ -310,9 +384,4 @@ class OpenAICompatibleImageProvider(BaseImageGenProvider, MLflowTracingMixin):
             pass
             
         return f"data:image/png;base64,{data}"
-
-    def _is_base64(self, s: str) -> bool:
-        """简单判断字符串是否为 base64"""
-        if not s: return False
-        return bool(re.match(r'^[A-Za-z0-9+/= \n\r]+$', s))
 

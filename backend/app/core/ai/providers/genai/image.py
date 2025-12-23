@@ -127,6 +127,11 @@ class GenAIProvider(BaseImageGenProvider, MLflowTracingMixin):
                         base64_data = ref_img.split(',')[1] if ',' in ref_img else ref_img
                         image_data = base64.b64decode(base64_data)
                         processed_images.append(Image.open(io.BytesIO(image_data)))
+                    elif ref_img.startswith('http'):
+                        # HTTP URL - 下载图片
+                        downloaded_image = self._download_image_from_url(ref_img)
+                        if downloaded_image:
+                            processed_images.append(downloaded_image)
                     else:
                         # 文件路径
                         processed_images.append(Image.open(ref_img))
@@ -146,6 +151,58 @@ class GenAIProvider(BaseImageGenProvider, MLflowTracingMixin):
                 )
         
         return processed_images
+
+    def _download_image_from_url(self, url: str) -> Optional[Image.Image]:
+        """
+        从 HTTP URL 下载图片
+        
+        Args:
+            url: 图片 URL（支持 COS、CDN 等 HTTP URL）
+            
+        Returns:
+            Optional[Image.Image]: PIL Image 对象，失败返回 None
+        """
+        import httpx
+        
+        try:
+            logger.info(
+                "下载参考图片",
+                operation="download_reference_image",
+                url=url[:100] if len(url) > 100 else url
+            )
+            
+            # 使用 httpx 下载图片（同步方式）
+            with httpx.Client(timeout=30.0) as client:
+                response = client.get(url)
+                response.raise_for_status()
+                
+                image_data = response.content
+                
+                # 验证图片数据有效性
+                if len(image_data) < 100:
+                    logger.warning(f"下载的图片数据过小: {len(image_data)} bytes")
+                    return None
+                
+                # 打开图片
+                image = Image.open(io.BytesIO(image_data))
+                
+                logger.info(
+                    "参考图片下载成功",
+                    operation="download_reference_image_success",
+                    size=len(image_data),
+                    image_size=image.size
+                )
+                
+                return image
+                
+        except Exception as e:
+            logger.error(
+                f"下载参考图片失败: {str(e)}",
+                operation="download_reference_image_error",
+                url=url[:100] if len(url) > 100 else url,
+                error=str(e)
+            )
+            return None
     
     async def generate_image(
         self,
@@ -273,6 +330,7 @@ class GenAIProvider(BaseImageGenProvider, MLflowTracingMixin):
                         return ImageGenerationResult(
                             success=True,
                             image_url=f"data:image/png;base64,{img_base64}",
+                            image=image,  # 保存 PIL Image 对象
                             metadata={
                                 "model": self.model,
                                 "prompt": prompt,

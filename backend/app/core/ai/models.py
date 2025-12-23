@@ -23,6 +23,7 @@ class ImageGenerationResult:
     """图片生成结果"""
     success: bool
     image_url: Optional[str] = None
+    image: Optional[Any] = None  # PIL Image 对象
     error_message: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
 
