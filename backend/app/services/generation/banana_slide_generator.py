@@ -146,12 +146,29 @@ class BananaSlideGenerator:
             if not image_gen_provider:
                 raise ValueError(f"不支持的模型provider: {provider_name}")
 
+            # 处理模板 URL：如果是 COS Key，生成预签名 URL
+            final_template_url = template_image_url
+            if template_image_url and not template_image_url.startswith(('http://', 'https://')):
+                try:
+                    from app.services.cache.image_url_service import get_image_url_service
+                    url_service = await get_image_url_service()
+                    url, _ = await url_service.get_image_url(template_image_url)
+                    final_template_url = url
+                    logger.info("已为参考图生成预签名 URL", extra={
+                        "cos_key": template_image_url,
+                        "url_length": len(url)
+                    })
+                except Exception as e:
+                    logger.error(f"为参考图生成预签名 URL 失败: {e}", extra={
+                        "cos_key": template_image_url
+                    })
+
             # 准备生成参数
             generation_params = {
                 "prompt": prompt,
                 "width": int(canvas_size["width"]),
                 "height": int(canvas_size["height"]),
-                "ref_images": [template_image_url],  # 使用模板作为参考图片
+                "ref_images": [final_template_url] if final_template_url else [],  # 使用模板作为参考图片
             }
 
             logger.info("调用AI Provider生成图片", extra={

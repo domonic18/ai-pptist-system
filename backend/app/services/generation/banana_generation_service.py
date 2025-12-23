@@ -316,34 +316,55 @@ class BananaGenerationService:
 
     async def get_templates(
         self,
-        type: Optional[str] = None,
+        template_type: Optional[str] = None,
         aspect_ratio: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         获取可用模板列表
 
         Args:
-            type: 模板类型（system|user）
+            template_type: 模板类型（system|user）
             aspect_ratio: 宽高比（16:9|4:3）
 
         Returns:
             Dict: 模板列表
         """
-        templates = await self.repo.get_templates(type=type, aspect_ratio=aspect_ratio)
+        from app.services.cache.image_url_service import get_image_url_service
+        url_service = await get_image_url_service()
+        
+        templates = await self.repo.get_templates(template_type=template_type, aspect_ratio=aspect_ratio)
+
+        formatted_templates = []
+        for t in templates:
+            # 为私有 COS 路径生成预签名 URL
+            cover_url = t.cover_url
+            if cover_url and not cover_url.startswith(('http://', 'https://')):
+                try:
+                    url, _ = await url_service.get_image_url(cover_url)
+                    cover_url = url
+                except Exception as e:
+                    logger.warning(f"为模板 {t.id} 生成封面预签名 URL 失败: {e}")
+
+            full_image_url = t.full_image_url
+            if full_image_url and not full_image_url.startswith(('http://', 'https://')):
+                try:
+                    url, _ = await url_service.get_image_url(full_image_url)
+                    full_image_url = url
+                except Exception as e:
+                    logger.warning(f"为模板 {t.id} 生成完整图预签名 URL 失败: {e}")
+
+            formatted_templates.append({
+                "id": t.id,
+                "name": t.name,
+                "description": t.description,
+                "cover_url": cover_url,
+                "full_image_url": full_image_url,
+                "type": t.type,
+                "aspect_ratio": t.aspect_ratio,
+                "usage_count": t.usage_count,
+                "created_at": t.created_at.isoformat() if t.created_at else None
+            })
 
         return {
-            "templates": [
-                {
-                    "id": t.id,
-                    "name": t.name,
-                    "description": t.description,
-                    "cover_url": t.cover_url,
-                    "full_image_url": t.full_image_url,
-                    "type": t.type,
-                    "aspect_ratio": t.aspect_ratio,
-                    "usage_count": t.usage_count,
-                    "created_at": t.created_at.isoformat() if t.created_at else None
-                }
-                for t in templates
-            ]
+            "templates": formatted_templates
         }
