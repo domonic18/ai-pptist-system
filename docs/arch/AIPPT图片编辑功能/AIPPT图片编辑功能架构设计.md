@@ -18,9 +18,11 @@
 
 1. 点击前端工具条按钮触发图片解析
 2. 后端解析图片中的文字，识别文字内容及其在图片中的区域位置
-3. 前端在原始图片上叠加显示可编辑的文字框架，用户可以直接修改文字
+3. 前端将 OCR 结果转换为**真实的幻灯片元素**并插入当前 slide（遮罩 Shape + Text 组合），用户即可像普通文本一样编辑/拖拽/缩放/旋转
 
-**说明**：用户编辑后的文字仅存在于前端内存中，用于演示和查看。如需保存修改后的 PPT，属于未来扩展功能。
+**说明**：
+- 本次仅实现“图片文字可编辑”的编辑体验：编辑结果写入前端 `slidesStore`（可撤销/重做、会话内持久），**不回传后端**。
+- 如需将修改持久化/导出为可编辑 PPTX，属于未来扩展功能。
 
 ---
 
@@ -34,8 +36,8 @@
 - 文字检测：识别图片中所有文字区域的位置（边界框）
 - 文字识别：识别每个区域内的文字内容
 - 区域返回：返回文字内容及其对应的坐标位置
-- 叠加渲染：前端在图片上叠加显示可编辑的文字框
-- **前端编辑**：编辑、拖拽移动、调整大小（仅内存，不持久化）
+- 元素化插入：前端将 OCR 结果转换为“遮罩 Shape + Text”并插入当前 slide
+- **前端编辑**：基于现有元素体系实现编辑、拖拽移动、调整大小、旋转（写入 `slidesStore`，不回传后端）
 
 **不在本次范围**：
 - ❌ 保存修改后的文字到后端
@@ -53,7 +55,8 @@
                                                           ▼
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │  编辑文字内容    │  ←  │  在图片上叠加    │  ←  │  解析完成       │
-│  (仅内存，不保存)│     │  显示可编辑框    │     │                 │
+│  (写入slidesStore│     │  转为可编辑元素  │     │                 │
+│   不回传后端)    │     │  (遮罩+文本)     │     │                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
@@ -230,7 +233,6 @@ frontend/src/
 │       │   ├── index.vue                      # ✅ 现有 - 画布容器（已有元素渲染）
 │       │   ├── EditableElement.vue            # ✅ 现有 - 元素编辑包装器
 │       │   ├── ViewportBackground.vue         # ✅ 现有 - 画布背景
-│       │   ├── TextOverlayLayer.vue           # ⭐ 新增 - OCR文字叠加层
 │       │   └── Operate/                       # ✅ 现有 - 元素操作（缩放、旋转等）
 │       ├── CanvasTool/
 │       │   └── index.vue                      # ✅ 现有 - 画布工具条（插入元素按钮）
@@ -263,10 +265,9 @@ frontend/src/
 | 组件/文件 | 状态 | 说明 | 变更内容 |
 |----------|------|------|----------|
 | `Editor/index.vue` | ✅ 现有 | 主编辑器布局 | 无需修改 |
-| `Canvas/index.vue` | 🔧 修改 | 画布容器 | 添加TextOverlayLayer渲染 |
+| `Canvas/index.vue` | ✅ 现有 | 画布容器 | 无需修改（元素插入后自动渲染） |
 | `Canvas/EditableElement.vue` | ✅ 现有 | 元素编辑器 | 直接复用，已有完整编辑功能 |
 | `Canvas/ViewportBackground.vue` | ✅ 现有 | 背景层 | 直接复用 |
-| `Canvas/TextOverlayLayer.vue` | ⭐ 新增 | 文字叠加层 | 新建，渲染OCR识别的文字框 |
 | `CanvasTool/index.vue` | ✅ 现有 | 工具条 | 无需修改 |
 | `Toolbar/index.vue` | 🔧 修改 | 右侧工具栏 | 添加"解析图片"按钮 |
 | `services/imageParsingService.ts` | ⭐ 新增 | 解析服务 | 新建，封装OCR API调用 |
@@ -276,19 +277,19 @@ frontend/src/
 
 **核心实现要点**：
 
-1. **复用 `EditableElement.vue`**：
-   - 现有组件已实现完整的文本编辑功能
-   - 支持编辑、拖拽、缩放、旋转
-   - 只需传入OCR识别的TextRegion数据即可
+1. **复用现有“元素体系”实现编辑**：
+   - OCR 完成后，将识别结果转换为真实元素并插入当前 slide
+   - 后续编辑完全复用现有渲染/选中/拖拽/缩放/旋转/撤销重做链路
 
-2. **复用 `Canvas/index.vue`**：
-   - 现有画布已有元素渲染系统
-   - 只需添加 `TextOverlayLayer` 组件渲染OCR结果
+2. **遮罩不使用 DOM 覆盖层**：
+   - 对每个 OCR 文本区域创建一个矩形 `shape` 作为遮罩（fill + opacity）
+   - 创建一个 `text` 元素覆盖其上
+   - 两者通过 `groupId` 绑定，移动/缩放/旋转天然同步
 
 3. **最小化新增代码**：
-   - `TextOverlayLayer.vue`：遍历OCR结果，渲染文字框
-   - `imageParsingService.ts`：封装API调用
-   - 工具栏按钮：触发解析操作
+   - `imageParsingService.ts`：封装 API 调用
+   - 工具栏按钮：触发解析与“转为可编辑元素”
+   -（可选）在 `slidesStore.updateElement` 或相关逻辑中加入“文本高度变化→同步遮罩高度”的轻量联动
 
 **服务封装** (`imageParsingService.ts` - 新增)：
 
@@ -304,11 +305,11 @@ export const imageParsingService = {
    */
   async parseSlideImage(
     slideId: string,
-    imageUrl: string
+    cosKey: string
   ): Promise<ParseTaskResponse> {
     const response = await axios.post(API_CONFIG.IMAGE_PARSING.PARSE, {
       slide_id: slideId,
-      image_url: imageUrl
+      cos_key: cosKey
     })
     return response.data.data
   },
@@ -352,15 +353,12 @@ export interface TextRegion {
     family: string
     weight: 'normal' | 'bold'
   }
-  // 前端编辑时临时使用（不持久化）
-  _isModified?: boolean
-  _originalText?: string
 }
 
 export interface ImageParseResult {
   task_id: string
   slide_id: string
-  image_url: string
+  cos_key: string
   status: 'pending' | 'processing' | 'completed' | 'failed'
   progress: number
   text_regions: TextRegion[]
@@ -401,7 +399,7 @@ export interface ImageParseResult {
 - **Redis**: 缓存解析状态和结果（提升查询性能）
 - **腾讯云COS**: 存储原始PPT图片
 
-**注意**：用户在前端编辑的文字内容**不持久化**，仅存在于前端内存中。
+**注意**：前端“转为可编辑元素”后，元素会写入 `slidesStore`（会话内持久、支持撤销重做），但**不回传后端**。
 
 ---
 
@@ -559,7 +557,7 @@ class ImageParseResult(BaseModel):
     """图片解析结果"""
     task_id: str
     slide_id: str
-    image_url: str
+    cos_key: str
     status: str
     progress: int
     text_regions: List[TextRegion]
@@ -568,7 +566,7 @@ class ImageParseResult(BaseModel):
 class ParseRequest(BaseModel):
     """解析请求"""
     slide_id: str
-    image_url: str
+    cos_key: str
     options: Optional[ParseOptions] = None
 
 class ParseOptions(BaseModel):
@@ -590,7 +588,7 @@ Authorization: Bearer <token>
 
 {
   "slide_id": "banana_task_xxx_slide_0",
-  "image_url": "https://xxx.cos.ap-beijing.myqcloud.com/ai-generated/ppt/xxx/slide_0.png"
+  "cos_key": "ai-generated/ppt/xxx/slide_0.png"
 }
 ```
 
@@ -598,6 +596,7 @@ Authorization: Bearer <token>
 - MVP阶段使用腾讯云OCR API，无需传递 `options` 参数
 - 后端自动调用腾讯云OCR进行文字识别
 - 未来扩展可支持 options 参数（如多语言、表格检测等）
+- **输入约束**：优先使用 `cos_key`（或受控的内部资源 ID），由后端通过 COS SDK 获取图片内容，避免直接下载任意 URL
 
 **响应**:
 
@@ -661,7 +660,7 @@ Content-Type: application/json
   "data": {
     "task_id": "parse_20241224_123456_abc123",
     "slide_id": "banana_task_xxx_slide_0",
-    "image_url": "https://xxx.cos.ap-beijing.myqcloud.com/ai-generated/ppt/xxx/slide_0.png",
+    "cos_key": "ai-generated/ppt/xxx/slide_0.png",
     "status": "completed",
     "progress": 100,
     "text_regions": [
@@ -729,303 +728,129 @@ Content-Type: application/json
 
 ### 5.4 前端渲染流程
 
-#### 5.4.1 核心方案：复用现有文字编辑组件 + 遮罩
+#### 5.4.1 核心方案：OCR 结果“元素化插入”（遮罩 Shape + Text 组合）
 
-**设计原则**：最大化复用现有成熟组件，避免重复造轮子。
+**设计原则**：最大化复用现有成熟“元素体系”，避免新增一套平行渲染/交互链路。
+
+**前提约束 / 协议（必须满足，保证坐标可推导）**：
+- **背景图比例一致**：生成的 slide 背景图宽高比必须与编辑器画布一致（默认 `viewportRatio = 16:9`）。
+- **背景渲染可推导映射**：背景图渲染必须不发生裁剪，推荐固定为 `background-size: 100% 100%`；或确保 `cover` 场景不会裁剪（即图片比例严格一致）。
+- **MVP 分辨率约定（推荐）**：香蕉生成的每页图片固定为 `1920x1080`（16:9）。这样前端可以无需依赖额外元数据即可换算 bbox → 幻灯片坐标。
 
 **方案概述**：
-- 直接复用 `EditableElement.vue`（现有元素编辑组件）
-- 使用遮罩层遮蔽原图片中的文字
-- OCR 结果转换为 PPTTextElement 格式
+- OCR 返回 `TextRegion[]`（包含 `bbox`）
+- 前端把 `bbox` 转成幻灯片坐标系的 `left/top/width/height`
+- 对每个区域插入两个真实元素：
+  - **遮罩元素**：矩形 `shape`，用于遮蔽原图文字（`fill + opacity`）
+  - **文字元素**：`text`，覆盖在遮罩上方
+- 两个元素共享同一 `groupId`，移动/缩放/旋转天然同步
 
-**层级结构**：
+**层级关系（由元素顺序自然保证）**：
+- 同一组内：先插入遮罩 shape，再插入 text（确保 text 在上层）
+
+#### 5.4.2 关键实现：bbox → 元素插入 + groupId 绑定
+
+**坐标换算（基于协议 1920x1080 与画布 viewportSize/viewportRatio）**：
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Canvas (画布容器)                                        │
-│  ┌───────────────────────────────────────────────────┐  │
-│  │  ViewportBackground (原始PPT图片)                  │  │
-│  │  人工智能技术发展 ← 原始不可编辑文字               │  │
-│  └───────────────────────────────────────────────────┘  │
-│  ┌───────────────────────────────────────────────────┐  │
-│  │  TextOverlayLayer (OCR文字叠加层) ⭐ 新增          │  │
-│  │  ┌─────────────────────────────────────────────┐  │  │
-│  │  │  TextRegionWrapper (相对定位)               │  │  │
-│  │  │  ┌───────────────────────────────────────┐  │  │  │
-│  │  │  │  text-mask (遮罩层)                   │  │  │  │
-│  │  │  │  background: rgba(255,255,255,0.95)   │  │  │  │
-│  │  │  │  z-index: 1                           │  │  │  │
-│  │  │  └───────────────────────────────────────┘  │  │  │
-│  │  │  ┌───────────────────────────────────────┐  │  │  │
-│  │  │  │  EditableElement (复用现有组件✅)     │  │  │  │
-│  │  │  │  人工智能技术发展 ← 可编辑文字        │  │  │  │
-│  │  │  │  z-index: 2                           │  │  │  │
-│  │  │  └───────────────────────────────────────┘  │  │  │
-│  │  └─────────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
+viewportWidth  = slidesStore.viewportSize
+viewportHeight = slidesStore.viewportSize * slidesStore.viewportRatio
+
+scaleX = viewportWidth  / 1920
+scaleY = viewportHeight / 1080
+
+left   = bbox.x      * scaleX
+top    = bbox.y      * scaleY
+width  = bbox.width  * scaleX
+height = bbox.height * scaleY
 ```
 
-**核心实现代码**：
-
-```vue
-<!-- frontend/src/views/Editor/Canvas/TextOverlayLayer.vue -->
-<template>
-  <div
-    v-if="showOverlay && textRegions.length > 0"
-    class="text-overlay-layer"
-  >
-    <div
-      v-for="region in textRegions"
-      :key="region.id"
-      class="text-region-wrapper"
-      :style="wrapperStyle(region)"
-    >
-      <!-- 遮罩层：遮蔽原图片中的文字 -->
-      <div class="text-mask"></div>
-
-      <!-- 复用现有的文字编辑组件 -->
-      <EditableElement
-        :elementInfo="toTextElement(region)"
-        :selectElement="handleSelect"
-        :isMultiSelect="false"
-      />
-    </div>
-  </div>
-</template>
-
-<script setup lang="ts">
-import EditableElement from './EditableElement.vue'
-import type { TextRegion } from '@/types/imageParsing'
-import type { PPTTextElement } from '@/types/slides'
-
-interface Props {
-  textRegions: TextRegion[]
-  showOverlay: boolean
-}
-
-const props = defineProps<Props>()
-
-// 计算包装器样式（绝对定位）
-const wrapperStyle = (region: TextRegion) => ({
-  left: region.bbox.x + 'px',
-  top: region.bbox.y + 'px',
-  width: region.bbox.width + 'px',
-  height: region.bbox.height + 'px',
-})
-
-/**
- * 将 OCR 识别的 TextRegion 转换为现有的 PPTTextElement 格式
- *
- * 转换映射：
- * - region.text → element.content
- * - region.bbox → element.{x, y, width, height}
- * - region.font → element.defaultFontSize/defaultFontName/etc
- */
-const toTextElement = (region: TextRegion): PPTTextElement => {
-  // 根据边界框高度推断字体大小（经验值：高度 * 0.7）
-  const inferredFontSize = Math.round(region.bbox.height * 0.7)
-
-  return {
-    type: 'text',
-    id: `ocr_text_${region.id}`,
-    x: 0, // 相对定位，在 wrapper 内部为 0
-    y: 0,
-    width: region.bbox.width,
-    height: region.bbox.height,
-    content: region.text,
-    defaultFontName: region.font?.family || 'Microsoft YaHei',
-    defaultFontSize: Math.max(12, Math.min(72, inferredFontSize)),
-    defaultColor: '#000000',
-    defaultFontWeight: region.font?.weight === 'bold' ? 'bold' : 'normal',
-    defaultAlign: 'center',
-    defaultVerticalAlign: 'middle',
-    fill: 'rgba(255, 255, 255, 0)', // 透明背景
-  }
-}
-
-// 空的选中处理函数（EditableElement 要求传入）
-const handleSelect = () => {}
-</script>
-
-<style scoped>
-.text-overlay-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 100;
-  pointer-events: none; /* 让未选中的区域点击穿透 */
-}
-
-.text-region-wrapper {
-  position: absolute;
-  pointer-events: auto; /* 文字区域可以交互 */
-}
-
-/* 遮罩层：遮蔽原图片中的文字 */
-.text-mask {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: white;
-  opacity: 0.95;
-  z-index: 1;
-}
-</style>
-```
-
-**数据转换示意**：
+**元素插入示例（核心思路，复用现有类型与渲染链路）**：
 
 ```typescript
-// OCR 返回格式
-TextRegion {
-  id: "region_001",
-  text: "人工智能技术发展现状",
-  bbox: { x: 250, y: 80, width: 500, height: 60 },
-  confidence: 0.98,
-  font: { size: 42, family: "Microsoft YaHei", weight: "bold" }
+import { nanoid } from 'nanoid'
+import { useMainStore, useSlidesStore } from '@/store'
+import type { PPTShapeElement, PPTTextElement } from '@/types/slides'
+import type { TextRegion } from '@/types/imageParsing'
+
+// 使用 configs/shapes.ts 中“矩形”shape 的 path/viewBox
+const RECT_SHAPE = {
+  viewBox: [200, 200] as [number, number],
+  path: 'M 0 0 L 200 0 L 200 200 L 0 200 Z',
 }
 
-         ↓ toTextElement() 转换
+const OCR_IMAGE_WIDTH = 1920
+const OCR_IMAGE_HEIGHT = 1080
 
-// 现有 PPT 元素格式
-PPTTextElement {
-  type: "text",
-  id: "ocr_text_region_001",
-  x: 0, y: 0,
-  width: 500, height: 60,
-  content: "人工智能技术发展现状",
-  defaultFontSize: 42,
-  defaultFontName: "Microsoft YaHei",
-  defaultFontWeight: "bold",
-  defaultAlign: "center",
-  // ... 其他属性
-}
-```
+export function insert_ocr_regions_as_elements(regions: TextRegion[], taskId: string) {
+  const mainStore = useMainStore()
+  const slidesStore = useSlidesStore()
+  const slide = slidesStore.currentSlide
+  if (!slide) return
 
-**方案优势**：
+  const viewportWidth = slidesStore.viewportSize
+  const viewportHeight = slidesStore.viewportSize * slidesStore.viewportRatio
+  const scaleX = viewportWidth / OCR_IMAGE_WIDTH
+  const scaleY = viewportHeight / OCR_IMAGE_HEIGHT
 
-| 优势 | 说明 |
-|------|------|
-| **零开发成本** | 直接复用 `EditableElement`，无需重新实现编辑功能 |
-| **功能完整** | 自动获得编辑、拖拽、缩放、旋转、样式调整等所有功能 |
-| **样式一致** | 与现有 PPT 编辑体验完全一致 |
-| **维护简单** | 只需维护遮罩层和数据转换逻辑 |
-| **扩展性强** | 未来系统升级 EditableElement，自动获得新功能 |
+  for (const region of regions) {
+    const groupId = `ocr_group_${taskId}_${region.id}`
+    const left = region.bbox.x * scaleX
+    const top = region.bbox.y * scaleY
+    const width = region.bbox.width * scaleX
+    const height = region.bbox.height * scaleY
 
-**Canvas 集成示例**：
+    const maskId = `ocr_mask_${taskId}_${region.id}`
+    const textId = `ocr_text_${taskId}_${region.id}`
 
-```vue
-<!-- frontend/src/views/Editor/Canvas/index.vue (部分修改) -->
-<template>
-  <div class="viewport">
-    <!-- 现有元素 -->
-    <EditableElement
-      v-for="(element, index) in elementList"
-      :key="element.id"
-      :elementInfo="element"
-      v-show="!hiddenElementIdList.includes(element.id)"
-    />
+    // 1) 遮罩 shape（先插入，保证位于 text 下方）
+    const maskEl: PPTShapeElement = {
+      type: 'shape',
+      id: maskId,
+      groupId,
+      left, top, width, height,
+      rotate: 0,
+      viewBox: RECT_SHAPE.viewBox,
+      path: RECT_SHAPE.path,
+      fixedRatio: false,
+      fill: '#ffffff',
+      opacity: 0.85,
+      outline: { width: 0, color: 'transparent' },
+    }
 
-    <!-- 新增：OCR 文字叠加层 -->
-    <TextOverlayLayer
-      v-if="ocrParseResult"
-      :textRegions="ocrParseResult.text_regions"
-      :showOverlay="showOCRTextOverlay"
-    />
-  </div>
-</template>
+    // 2) 文字 text（覆盖在遮罩之上）
+    const textEl: PPTTextElement = {
+      type: 'text',
+      id: textId,
+      groupId,
+      left, top, width, height,
+      rotate: 0,
+      content: region.text,
+      defaultFontName: region.font?.family || slidesStore.theme.fontName,
+      defaultColor: '#000000',
+    }
 
-<script setup lang="ts">
-import TextOverlayLayer from './TextOverlayLayer.vue'
-import { ref } from 'vue'
-import { imageParsingService } from '@/services/imageParsingService'
+    slidesStore.addElement(maskEl)
+    slidesStore.addElement(textEl)
+  }
 
-const ocrParseResult = ref(null)
-const showOCRTextOverlay = ref(false)
-
-// 解析当前幻灯片图片
-async function parseCurrentSlideImage() {
-  const currentSlide = currentSlide.value
-  if (!currentSlide) return
-
-  // 提交解析任务
-  const response = await imageParsingService.parseSlideImage(
-    currentSlide.id,
-    currentSlide.backgroundImage?.src || ''
-  )
-
-  // 轮询获取结果
-  const result = await pollParsingStatus(response.task_id)
-  ocrParseResult.value = result
-  showOCRTextOverlay.value = true
-}
-</script>
-```
-
-#### 5.4.2 遮蔽原文字的原理
-
-**为什么需要遮罩**：
-- 原图片中的文字是"画"在图片里的，无法单独删除
-- 如果不遮蔽，叠加的编辑文字会和原文字重叠显示
-- 用白色遮罩层覆盖原文字，实现"视觉删除"效果
-
-**遮罩层级关系**：
-
-```
-z-index: 2  EditableElement (新文字，可编辑)
-                ↓ 用户看到的是这个
-z-index: 1  text-mask (白色遮罩，opacity: 0.95)
-                ↓ 遮蔽原文字
-z-index: 0  原始图片 (包含不可编辑的原文字)
-```
-
-**遮罩效果示意**：
-
-```
-无遮罩（错误效果）:
-┌────────────────────────────┐
-│ 人工智能技术发展现状      │ ← 新文字（可编辑）
-│ 人工智能技术发展现状      │ ← 原文字（不可编辑）
-│ 重叠显示，看不清          │
-└────────────────────────────┘
-
-有遮罩（正确效果）:
-┌────────────────────────────┐
-│                          │ ← 白色遮罩
-│ 人工智能技术发展现状      │ ← 新文字（可编辑）
-│                          │
-└────────────────────────────┘
-```
-
-**遮罩样式优化**：
-
-```css
-/* 方案1：纯白色遮罩（推荐） */
-.text-mask {
-  background: white;
-  opacity: 0.95;
-}
-
-/* 方案2：根据背景色调整（如果原背景不是白色） */
-.text-mask {
-  background: var(--slide-background-color, white);
-  opacity: 0.95;
-}
-
-/* 方案3：模糊遮罩（效果更柔和） */
-.text-mask {
-  background: white;
-  opacity: 0.9;
-  backdrop-filter: blur(2px);
+  // 让用户立刻能操作（可按需选中整组或最后一个元素）
+  // 这里仅示意：实际可根据交互把 activeElementIdList 设为某个 textId 或整组元素ID列表
+  mainStore.setActiveElementIdList([])
 }
 ```
 
-#### 5.4.3 完整的数据流
+#### 5.4.3 文本高度变化 → 同步遮罩（轻量联动）
+
+**问题**：现有 `TextElement` 会根据内容自动更新 `height`（ResizeObserver + `slidesStore.updateElement`）。如果遮罩高度不跟随，会露出原图文字。
+
+**建议策略（不引入新渲染层）**：
+- 约定 OCR 元素 ID 命名：`ocr_text_${taskId}_${regionId}` 与 `ocr_mask_${taskId}_${regionId}`
+- 在 `slidesStore.updateElement(...)`（或其调用链的一个集中位置）增加一段轻量逻辑：
+  - 当更新的是 `ocr_text_...` 且 `height`/`width` 发生变化时
+  - 同步更新对应 `ocr_mask_...` 的 `height`/`width`（必要时也可同步 `left/top`）
+
+**完整数据流（更新版）**：
 
 ```
 ┌────────────────┐
@@ -1034,48 +859,36 @@ z-index: 0  原始图片 (包含不可编辑的原文字)
 └───────┬────────┘
         │
         ▼
-┌────────────────┐
-│ 2. 前端调用    │ ← imageParsingService.parseSlideImage()
-│    API         │
-└───────┬────────┘
+┌──────────────────────────────┐
+│ 2. 前端调用 API               │ ← imageParsingService.parseSlideImage(slideId, cosKey)
+└───────┬──────────────────────┘
         │
         ▼
-┌────────────────┐
-│ 3. 后端 OCR    │ ← TencentOCRSDKEngine.parse_from_url()
-│    识别        │
-└───────┬────────┘
-        │
-        ▼ 返回 TextRegion[]
-┌────────────────────────────────────┐
-│ 4. 前端接收解析结果                │
-│    {                              │
-│      id: "region_001",            │
-│      text: "人工智能技术",        │
-│      bbox: {x, y, width, height}  │
-│    }                              │
-└───────┬────────────────────────────┘
-        │
-        ▼ toTextElement() 转换
-┌────────────────────────────────────┐
-│ 5. 转换为 PPTTextElement 格式      │
-│    {                              │
-│      type: "text",                │
-│      content: "人工智能技术",     │
-│      defaultFontSize: 42,         │
-│      x: 0, y: 0, width, height    │
-│    }                              │
-└───────┬────────────────────────────┘
+┌──────────────────────────────────────────┐
+│ 3. 后端通过 COS SDK 获取图片 bytes        │
+│    + OCR 识别，产出 TextRegion[]          │
+└───────┬──────────────────────────────────┘
         │
         ▼
-┌────────────────────────────────────┐
-│ 6. EditableElement 渲染            │
-│    (复用现有组件✅)                │
-│    - 双击可编辑                    │
-│    - 拖拽可移动                    │
-│    - 支持所有文本编辑功能          │
-└────────────────────────────────────┘
+┌──────────────────────────────────────────┐
+│ 4. 前端拿到 TextRegion[]                  │
+└───────┬──────────────────────────────────┘
         │
-        ▼ 用户编辑（仅内存）
+        ▼（用户确认/一键转换）
+┌──────────────────────────────────────────┐
+│ 5. bbox → 幻灯片坐标，插入真实元素         │
+│    - mask: shape（遮罩）                   │
+│    - text: text（可编辑）                  │
+│    - groupId 绑定                           │
+└───────┬──────────────────────────────────┘
+        │
+        ▼
+┌──────────────────────────────────────────┐
+│ 6. 复用现有渲染与交互链路                  │
+│    - EditableElement/TextElement 渲染       │
+│    - 拖拽/缩放/旋转/撤销重做                │
+│    - 文本自适应高度 + 同步遮罩              │
+└──────────────────────────────────────────┘
 ```
 
 ---
@@ -1136,13 +949,15 @@ class TencentOCRSDKEngine:
         cred = credential.Credential(secret_id, secret_key)
         self.client = ocr_client.OcrClient(cred, region)
 
-    def parse_from_url(self, image_url: str) -> List[Dict]:
-        """从URL解析图片"""
-        # 下载图片
-        import requests
+    async def parse_from_cos_key(self, cos_key: str) -> List[Dict]:
+        """从COS Key解析图片（推荐：避免下载任意URL）"""
         import base64
-        img_data = requests.get(image_url).content
-        img_base64 = base64.b64encode(img_data).decode()
+        from app.core.storage import get_storage_service
+
+        # 通过统一存储服务从 COS 拉取图片 bytes
+        storage = get_storage_service()
+        download_result = await storage.download(cos_key)
+        img_base64 = base64.b64encode(download_result.data).decode()
 
         # 调用API（通用印刷体识别）
         req = models.GeneralBasicOCRRequest()
@@ -1185,9 +1000,11 @@ class TencentOCRSDKEngine:
 import os
 from app.services.ocr.tencent_ocr_sdk_engine import TencentOCRSDKEngine
 
-# 测试
+# 测试（示例）
+import asyncio
+
 engine = TencentOCRSDKEngine()
-result = engine.parse_from_url("https://xxx.com/test.png")
+result = asyncio.run(engine.parse_from_cos_key("ai-generated/ppt/xxx/slide_0.png"))
 
 for item in result:
     print(f"文字: {item['text']}")
@@ -1230,7 +1047,7 @@ class ImageParsingService:
     async def parse_image(
         self,
         slide_id: str,
-        image_url: str,
+        cos_key: str,
         options: Optional[Dict] = None,
         user_id: Optional[str] = None
     ) -> ParseResult:
@@ -1242,7 +1059,7 @@ class ImageParsingService:
         await self.repo.create_task(
             task_id=task_id,
             slide_id=slide_id,
-            image_url=image_url,
+            cos_key=cos_key,
             user_id=user_id,
             status="processing"
         )
@@ -1251,11 +1068,8 @@ class ImageParsingService:
             # 获取 OCR 引擎
             ocr_engine = self._get_ocr_engine(options)
 
-            # 执行 OCR 识别
-            ocr_results = await asyncio.to_thread(
-                ocr_engine.parse_from_url,
-                image_url
-            )
+            # 执行 OCR 识别（COS Key → bytes → OCR）
+            ocr_results = await ocr_engine.parse_from_cos_key(cos_key)
 
             # 构建文字区域数据
             text_regions = []
@@ -1298,7 +1112,7 @@ class ImageParsingService:
             return ParseResult(
                 task_id=task_id,
                 slide_id=slide_id,
-                image_url=image_url,
+                cos_key=cos_key,
                 status="completed",
                 progress=100,
                 text_regions=text_regions,
@@ -1338,7 +1152,7 @@ class ImageParsingService:
 CREATE TABLE image_parse_tasks (
     id VARCHAR(50) PRIMARY KEY,                    -- 任务ID
     slide_id VARCHAR(100) NOT NULL,                -- 关联的幻灯片ID
-    image_url TEXT NOT NULL,                       -- 原始图片URL
+    cos_key TEXT NOT NULL,                         -- 原始图片COS Key（受控输入）
     status parse_task_status NOT NULL,             -- 任务状态
     progress INTEGER DEFAULT 0,                    -- 进度 0-100
 
@@ -1403,7 +1217,7 @@ Key: image:parse:result:{task_id}
 Value: {
     "task_id": "parse_20241224_123456_abc123",
     "slide_id": "banana_xxx_slide_0",
-    "image_url": "https://xxx.cos.ap-beijing.myqcloud.com/...",
+    "cos_key": "ai-generated/ppt/xxx/slide_0.png",
     "status": "completed",
     "progress": 100,
     "text_regions": [
@@ -1475,7 +1289,7 @@ async def parse_image(
     task = parse_image_task.apply_async(
         kwargs={
             "slide_id": request.slide_id,
-            "image_url": request.image_url,
+            "cos_key": request.cos_key,
             "options": request.options.dict() if request.options else None,
             "user_id": user_id
         },
@@ -1528,7 +1342,7 @@ from app.services.parsing.image_parsing_service import ImageParsingService
 def parse_image_task(
     self,
     slide_id: str,
-    image_url: str,
+    cos_key: str,
     options: dict = None,
     user_id: str = None
 ):
@@ -1543,7 +1357,7 @@ def parse_image_task(
             service = ImageParsingService(db)
             result = await service.parse_image(
                 slide_id=slide_id,
-                image_url=image_url,
+                cos_key=cos_key,
                 options=options,
                 user_id=user_id
             )
@@ -1604,16 +1418,16 @@ export const imageParsingService = {
   /**
    * 解析图片中的文字
    * @param slideId 幻灯片ID
-   * @param imageUrl 图片URL
+   * @param cosKey 图片COS Key
    * @returns 解析任务响应
    */
   async parseSlideImage(
     slideId: string,
-    imageUrl: string
+    cosKey: string
   ): Promise<ParseTaskResponse> {
     const { data } = await http.post(API_CONFIG.IMAGE_PARSING.PARSE, {
       slide_id: slideId,
-      image_url: imageUrl
+      cos_key: cosKey
     })
     return data
   },
@@ -1690,9 +1504,6 @@ export interface TextRegion {
   bbox: BoundingBox
   confidence: number
   font?: FontInfo
-  // 前端编辑时临时使用（不持久化，刷新后重置）
-  _isModified?: boolean
-  _originalText?: string
 }
 
 /**
@@ -1712,7 +1523,7 @@ export interface ParseMetadata {
 export interface ImageParseResult {
   task_id: string
   slide_id: string
-  image_url: string
+  cos_key: string
   status: 'pending' | 'processing' | 'completed' | 'failed'
   progress: number
   text_regions: TextRegion[]
@@ -1734,7 +1545,7 @@ export interface ImageParseResult {
 
 #### 第一阶段：核心功能实现 (1-2周)
 
-**目标**: 实现基础的文字识别和文字框显示
+**目标**: 实现基础的文字识别 + 将 OCR 结果转换为可编辑元素（遮罩 Shape + Text）并插入当前页
 
 - [ ] 准备工作：
   - [ ] 注册腾讯云账号并开通OCR服务（5分钟）
@@ -1748,8 +1559,8 @@ export interface ImageParseResult {
 
 - [ ] 前端：
   - [ ] 添加解析按钮到工具条
-  - [ ] 实现图片叠加层组件
-  - [ ] 实现文字框显示组件
+  - [ ] 实现“OCR 结果 → 元素插入”转换逻辑（bbox 换算 + 插入 shape/text + groupId 绑定）
+  - [ ] 实现遮罩联动（文本高度变化时同步遮罩高度）
   - [ ] 实现轮询获取解析结果
 
 **交付标准**:
