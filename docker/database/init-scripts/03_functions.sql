@@ -4,6 +4,8 @@
 -- 设置搜索路径
 SET search_path TO public;
 
+-- 注意: update_updated_at_column() 函数已在 01_schema.sql 中定义
+
 -- 创建搜索函数 - 根据标签搜索图片
 CREATE OR REPLACE FUNCTION search_images_by_tags(
     search_tags TEXT[],

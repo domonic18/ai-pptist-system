@@ -83,7 +83,6 @@ async def parse_image(
             "图片解析失败",
             extra={
                 "slide_id": request.slide_id,
-                "cos_key": request.cos_key,
                 "error": str(e)
             }
         )
@@ -156,7 +155,14 @@ async def get_parse_status(
             response_data["text_regions"] = [
                 region.dict() for region in result.text_regions
             ]
-            response_data["metadata"] = result.metadata.dict()
+            if result.metadata:
+                response_data["metadata"] = result.metadata.dict()
+            else:
+                # 如果任务已完成但metadata为None，记录警告但不返回错误
+                logger.warning(
+                    "任务已完成但metadata为空",
+                    extra={"task_id": task_id}
+                )
 
         return {
             "success": True,

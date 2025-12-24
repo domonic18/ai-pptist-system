@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS image_parse_tasks (
 
     -- 关联信息
     slide_id VARCHAR(100) NOT NULL,               -- 关联的幻灯片ID
-    cos_key TEXT NOT NULL,                        -- 原始图片COS Key（受控输入）
+    cos_key TEXT,                                 -- 原始图片COS Key（可选，前端可直接传递Base64时为空）
 
     -- 任务配置
     parse_options JSONB,                          -- 解析选项配置（预留扩展）

@@ -6,10 +6,11 @@
 from typing import Dict, Any, Optional
 from datetime import datetime
 import uuid
+import json
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.image_parsing import ImageParsingRepository
-from app.services.ocr.tencent_ocr_sdk_engine import TencentOCRSDKEngine
+from app.services.ocr.baidu_ocr_engine import BaiduOCREngine
 from app.schemas.image_parsing import (
     TextRegion, ParseMetadata, ImageParseResult,
     ParseRequest
@@ -34,15 +35,15 @@ class ImageParsingService:
         self.repo = ImageParsingRepository(db)
         self.ocr_engine = None
 
-    def _get_ocr_engine(self) -> TencentOCRSDKEngine:
+    def _get_ocr_engine(self) -> BaiduOCREngine:
         """
         获取 OCR 引擎实例（单例模式）
 
         Returns:
-            TencentOCRSDKEngine: OCR引擎实例
+            BaiduOCREngine: OCR引擎实例
         """
         if self.ocr_engine is None:
-            self.ocr_engine = TencentOCRSDKEngine()
+            self.ocr_engine = BaiduOCREngine()
         return self.ocr_engine
 
     async def parse_image(
@@ -67,7 +68,11 @@ class ImageParsingService:
 
         logger.info(
             "开始图片解析任务",
-            extra={"task_id": task_id, "slide_id": slide_id, "cos_key": cos_key}
+            extra={
+                "task_id": task_id,
+                "slide_id": slide_id,
+                "cos_key": cos_key
+            }
         )
 
         # 创建任务记录
@@ -89,8 +94,8 @@ class ImageParsingService:
             # 获取 OCR 引擎
             ocr_engine = self._get_ocr_engine()
 
-            # 执行 OCR 识别
-            logger.info("开始OCR识别", extra={"task_id": task_id})
+            # 执行 OCR 识别（从COS Key）
+            logger.info("开始OCR识别", extra={"task_id": task_id, "cos_key": cos_key})
             ocr_results = await ocr_engine.parse_from_cos_key(cos_key)
 
             # 构建文字区域数据
@@ -121,19 +126,20 @@ class ImageParsingService:
             # 构建元数据
             metadata = ParseMetadata(
                 parse_time=parse_time,
-                ocr_engine="tencent_ocr",
+                ocr_engine="baidu_ocr",
                 text_count=len(text_regions),
                 created_at=start_time,
                 completed_at=datetime.now()
             )
 
             # 更新任务状态为完成
+            # 使用 json.loads(metadata.json()) 确保 datetime 字段被正确序列化为字符串
             await self.repo.update_task_status(
                 task_id=task_id,
                 status=ParseTaskStatus.COMPLETED,
                 progress=100,
                 text_regions=[r.dict() for r in text_regions],
-                metadata=metadata.dict()
+                metadata=json.loads(metadata.json())
             )
 
             logger.info(
@@ -183,7 +189,7 @@ class ImageParsingService:
             return None
 
         # 构建响应数据
-        text_regions = None
+        text_regions = []
         metadata = None
 
         if task.text_regions:
@@ -200,7 +206,7 @@ class ImageParsingService:
             cos_key=task.cos_key,
             status=task.status,
             progress=task.progress,
-            text_regions=text_regions or [],
+            text_regions=text_regions,
             metadata=metadata
         )
 

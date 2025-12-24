@@ -3,7 +3,7 @@
 用于API请求和响应的数据验证和序列化
 """
 
-from typing import Optional, List, Dict
+from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -58,9 +58,8 @@ class ParseRequest(BaseModel):
 
 class ParseOptions(BaseModel):
     """解析选项（预留扩展）"""
-    # MVP阶段使用腾讯云OCR，无需传递额外参数
+    # MVP阶段使用百度云OCR，无需传递额外参数
     # 未来可扩展：language, detect_tables 等选项
-    pass
 
 
 # ============================================================================
@@ -79,7 +78,7 @@ class ParseStatusResponse(BaseModel):
     """解析状态响应（完成时包含完整结果）"""
     task_id: str = Field(..., description="任务ID")
     slide_id: str = Field(..., description="幻灯片ID")
-    cos_key: str = Field(..., description="图片COS Key")
+    cos_key: Optional[str] = Field(None, description="图片COS Key")
     status: str = Field(..., description="任务状态")
     progress: int = Field(..., ge=0, le=100, description="进度 0-100")
     current_step: Optional[str] = Field(None, description="当前处理步骤")
@@ -92,8 +91,8 @@ class ImageParseResult(BaseModel):
     """图片解析结果（完整版）"""
     task_id: str = Field(..., description="任务ID")
     slide_id: str = Field(..., description="幻灯片ID")
-    cos_key: str = Field(..., description="图片COS Key")
+    cos_key: Optional[str] = Field(None, description="图片COS Key")
     status: str = Field(..., description="任务状态")
     progress: int = Field(..., ge=0, le=100, description="进度 0-100")
     text_regions: List[TextRegion] = Field(..., description="文字区域列表")
-    metadata: ParseMetadata = Field(..., description="解析元数据")
+    metadata: Optional[ParseMetadata] = Field(None, description="解析元数据（任务完成时存在）")

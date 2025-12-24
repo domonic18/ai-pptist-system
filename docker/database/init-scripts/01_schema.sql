@@ -250,11 +250,9 @@ CREATE INDEX IF NOT EXISTS idx_slide_images_image_id ON slide_images(image_id);
 CREATE INDEX IF NOT EXISTS idx_slide_images_user_id ON slide_images(user_id);
 
 -- 为AI模型表创建索引
-CREATE INDEX IF NOT EXISTS idx_ai_models_provider ON ai_models(provider);
 CREATE INDEX IF NOT EXISTS idx_ai_models_enabled ON ai_models(is_enabled);
 CREATE INDEX IF NOT EXISTS idx_ai_models_default ON ai_models(is_default);
 CREATE INDEX IF NOT EXISTS idx_ai_models_created_at ON ai_models(created_at);
-CREATE INDEX IF NOT EXISTS idx_ai_models_image_generation ON ai_models(supports_image_generation);
 
 -- 为标签表创建索引
 CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name);

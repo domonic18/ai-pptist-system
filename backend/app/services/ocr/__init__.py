@@ -4,7 +4,9 @@ OCR服务模块
 """
 
 from app.services.ocr.tencent_ocr_sdk_engine import TencentOCRSDKEngine
+from app.services.ocr.baidu_ocr_engine import BaiduOCREngine
 
 __all__ = [
     "TencentOCRSDKEngine",
+    "BaiduOCREngine",
 ]

@@ -26,7 +26,7 @@ class ImageParsingRepository(BaseRepository):
         self,
         task_id: str,
         slide_id: str,
-        cos_key: str,
+        cos_key: Optional[str] = None,
         user_id: Optional[str] = None,
         parse_options: Optional[Dict] = None
     ) -> ImageParseTask:
@@ -36,7 +36,7 @@ class ImageParsingRepository(BaseRepository):
         Args:
             task_id: 任务ID
             slide_id: 幻灯片ID
-            cos_key: 图片COS Key
+            cos_key: 图片COS Key（可选）
             user_id: 用户ID
             parse_options: 解析选项
 
@@ -85,7 +85,7 @@ class ImageParsingRepository(BaseRepository):
             update_data["text_regions"] = text_regions
 
         if metadata is not None:
-            update_data["metadata"] = metadata
+            update_data["parse_metadata"] = metadata
 
         if error_message is not None:
             update_data["error_message"] = error_message

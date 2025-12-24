@@ -32,7 +32,7 @@ class ImageParseTask(Base):
 
     # 关联信息
     slide_id = Column(String(100), nullable=False)
-    cos_key = Column(Text, nullable=False)
+    cos_key = Column(Text, nullable=True)
 
     # 任务配置
     parse_options = Column(JSONB, nullable=True)
