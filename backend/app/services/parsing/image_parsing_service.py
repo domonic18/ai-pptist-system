@@ -10,7 +10,7 @@ import json
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.image_parsing import ImageParsingRepository
-from app.services.ocr.baidu_ocr_engine import BaiduOCREngine
+from app.services.ocr.multimodal_ocr_engine import MultimodalOCREngine
 from app.schemas.image_parsing import (
     TextRegion, ParseMetadata, ImageParseResult,
     ParseRequest
@@ -35,15 +35,15 @@ class ImageParsingService:
         self.repo = ImageParsingRepository(db)
         self.ocr_engine = None
 
-    def _get_ocr_engine(self) -> BaiduOCREngine:
+    def _get_ocr_engine(self) -> MultimodalOCREngine:
         """
         获取 OCR 引擎实例（单例模式）
 
         Returns:
-            BaiduOCREngine: OCR引擎实例
+            MultimodalOCREngine: OCR引擎实例
         """
         if self.ocr_engine is None:
-            self.ocr_engine = BaiduOCREngine()
+            self.ocr_engine = MultimodalOCREngine(self.db)
         return self.ocr_engine
 
     async def parse_image(
@@ -103,13 +103,15 @@ class ImageParsingService:
             for idx, result in enumerate(ocr_results):
                 region_id = f"region_{idx + 1:03d}"
 
-                # 推断字体信息
+                # 从OCR结果获取字体信息（多模态模型已提供）
                 bbox = result["bbox"]
-                font_info = {
-                    "size": ocr_engine.infer_font_size(bbox),
+                font_info = result.get("font", {
+                    "size": 16,
                     "family": "Microsoft YaHei",
-                    "weight": ocr_engine.infer_font_weight(result["text"], bbox)
-                }
+                    "weight": "normal",
+                    "color": "#000000",
+                    "align": "left"
+                })
 
                 text_region = TextRegion(
                     id=region_id,
@@ -126,7 +128,7 @@ class ImageParsingService:
             # 构建元数据
             metadata = ParseMetadata(
                 parse_time=parse_time,
-                ocr_engine="baidu_ocr",
+                ocr_engine="multimodal_ocr",
                 text_count=len(text_regions),
                 created_at=start_time,
                 completed_at=datetime.now()

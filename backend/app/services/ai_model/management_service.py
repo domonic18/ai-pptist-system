@@ -96,7 +96,7 @@ class ManagementService:
 
     async def get_default_model(self, capability: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """获取默认模型
-        
+
         Args:
             capability: 如果指定，返回支持该能力的默认模型
         """
@@ -106,6 +106,49 @@ class ManagementService:
         except Exception as e:
             logger.error(
                 "获取默认AI模型失败",
+                extra={
+                    "error": str(e),
+                    "capability": capability
+                }
+            )
+            return None
+
+    async def get_default_model_for_use(self, capability: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """获取默认模型（内部使用，包含api_key）
+
+        与 get_default_model 的区别在于此方法返回包含 api_key 的完整配置，
+        仅用于内部服务调用，不对外暴露。
+
+        Args:
+            capability: 如果指定，返回支持该能力的默认模型
+
+        Returns:
+            包含 api_key 的模型配置字典
+        """
+        try:
+            model = await self.repository.get_default_model(capability=capability)
+            if not model:
+                return None
+
+            return {
+                "id": model.id,
+                "name": model.name,
+                "ai_model_name": model.ai_model_name,
+                "base_url": model.base_url,
+                "api_key": model.api_key,  # 包含敏感信息
+                "capabilities": model.capabilities or [],
+                "provider_mapping": model.provider_mapping or {},
+                "parameters": model.parameters or {},
+                "max_tokens": model.max_tokens,
+                "context_window": model.context_window,
+                "is_enabled": model.is_enabled,
+                "is_default": model.is_default,
+                "created_at": model.created_at,
+                "updated_at": model.updated_at
+            }
+        except Exception as e:
+            logger.error(
+                "获取默认AI模型失败（内部使用）",
                 extra={
                     "error": str(e),
                     "capability": capability

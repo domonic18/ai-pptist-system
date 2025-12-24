@@ -22,10 +22,11 @@ class BoundingBox(BaseModel):
 
 class FontInfo(BaseModel):
     """字体信息"""
-    size: int = Field(..., description="字体大小（估计值）")
+    size: int = Field(..., description="字体大小（像素）")
     family: str = Field(default="Microsoft YaHei", description="字体族")
     weight: str = Field(default="normal", description="字重：normal 或 bold")
-    color: Optional[str] = Field(None, description="字体颜色（可选）")
+    color: str = Field(default="#000000", description="字体颜色（十六进制）")
+    align: str = Field(default="left", description="对齐方式：left, center, right")
 
 
 class TextRegion(BaseModel):

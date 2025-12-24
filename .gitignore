@@ -30,3 +30,8 @@ coverage
 *.tsbuildinfo
 .claude
 .trees
+
+# Python egg-info
+core.*.egg-info/
+ai_pptist_backend.egg-info/
+*.egg-info/
