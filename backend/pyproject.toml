@@ -46,6 +46,7 @@ dependencies = [
     "mlflow==3.1.4",
     "tenacity>=8.2.3",
     "tiktoken>=0.5.2",
+    "tencentcloud-sdk-python>=3.0.1000",  # 腾讯云 OCR SDK
 
     # 图片生成SDK
     "dashscope>=1.17.0",  # 通义千问文生图SDK
@@ -54,6 +55,7 @@ dependencies = [
     # 文件存储和云服务
     "cos-python-sdk-v5==1.9.27",
     "requests==2.31.0",
+    "Pillow>=10.0.0",  # 图片处理库，用于OCR图片缩放
 
     # 缓存和代理
     "redis[hiredis]>=5.0.0",

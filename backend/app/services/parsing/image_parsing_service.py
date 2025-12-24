@@ -1,0 +1,231 @@
+"""
+图片解析服务
+提供图片文字识别的核心业务逻辑
+"""
+
+from typing import Dict, Any, Optional
+from datetime import datetime
+import uuid
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.repositories.image_parsing import ImageParsingRepository
+from app.services.ocr.tencent_ocr_sdk_engine import TencentOCRSDKEngine
+from app.schemas.image_parsing import (
+    TextRegion, ParseMetadata, ImageParseResult,
+    ParseRequest
+)
+from app.models.image_parse_task import ParseTaskStatus
+from app.core.log_utils import get_logger
+
+logger = get_logger(__name__)
+
+
+class ImageParsingService:
+    """图片解析服务"""
+
+    def __init__(self, db: AsyncSession):
+        """
+        初始化服务
+
+        Args:
+            db: 数据库会话
+        """
+        self.db = db
+        self.repo = ImageParsingRepository(db)
+        self.ocr_engine = None
+
+    def _get_ocr_engine(self) -> TencentOCRSDKEngine:
+        """
+        获取 OCR 引擎实例（单例模式）
+
+        Returns:
+            TencentOCRSDKEngine: OCR引擎实例
+        """
+        if self.ocr_engine is None:
+            self.ocr_engine = TencentOCRSDKEngine()
+        return self.ocr_engine
+
+    async def parse_image(
+        self,
+        slide_id: str,
+        cos_key: str,
+        user_id: Optional[str] = None
+    ) -> ImageParseResult:
+        """
+        解析图片中的文字
+
+        Args:
+            slide_id: 幻灯片ID
+            cos_key: 图片COS Key
+            user_id: 用户ID（可选）
+
+        Returns:
+            ImageParseResult: 解析结果
+        """
+        start_time = datetime.now()
+        task_id = f"parse_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+
+        logger.info(
+            "开始图片解析任务",
+            extra={"task_id": task_id, "slide_id": slide_id, "cos_key": cos_key}
+        )
+
+        # 创建任务记录
+        await self.repo.create_task(
+            task_id=task_id,
+            slide_id=slide_id,
+            cos_key=cos_key,
+            user_id=user_id
+        )
+
+        try:
+            # 更新状态为处理中
+            await self.repo.update_task_status(
+                task_id=task_id,
+                status=ParseTaskStatus.PROCESSING,
+                progress=0
+            )
+
+            # 获取 OCR 引擎
+            ocr_engine = self._get_ocr_engine()
+
+            # 执行 OCR 识别
+            logger.info("开始OCR识别", extra={"task_id": task_id})
+            ocr_results = await ocr_engine.parse_from_cos_key(cos_key)
+
+            # 构建文字区域数据
+            text_regions = []
+            for idx, result in enumerate(ocr_results):
+                region_id = f"region_{idx + 1:03d}"
+
+                # 推断字体信息
+                bbox = result["bbox"]
+                font_info = {
+                    "size": ocr_engine.infer_font_size(bbox),
+                    "family": "Microsoft YaHei",
+                    "weight": ocr_engine.infer_font_weight(result["text"], bbox)
+                }
+
+                text_region = TextRegion(
+                    id=region_id,
+                    text=result["text"],
+                    bbox=bbox,
+                    confidence=result["confidence"],
+                    font=font_info
+                )
+                text_regions.append(text_region)
+
+            # 计算解析耗时
+            parse_time = int((datetime.now() - start_time).total_seconds() * 1000)
+
+            # 构建元数据
+            metadata = ParseMetadata(
+                parse_time=parse_time,
+                ocr_engine="tencent_ocr",
+                text_count=len(text_regions),
+                created_at=start_time,
+                completed_at=datetime.now()
+            )
+
+            # 更新任务状态为完成
+            await self.repo.update_task_status(
+                task_id=task_id,
+                status=ParseTaskStatus.COMPLETED,
+                progress=100,
+                text_regions=[r.dict() for r in text_regions],
+                metadata=metadata.dict()
+            )
+
+            logger.info(
+                "图片解析完成",
+                extra={
+                    "task_id": task_id,
+                    "text_count": len(text_regions),
+                    "parse_time": parse_time
+                }
+            )
+
+            return ImageParseResult(
+                task_id=task_id,
+                slide_id=slide_id,
+                cos_key=cos_key,
+                status=ParseTaskStatus.COMPLETED,
+                progress=100,
+                text_regions=text_regions,
+                metadata=metadata
+            )
+
+        except Exception as e:
+            logger.error("图片解析失败", extra={"task_id": task_id, "error": str(e)})
+
+            # 更新任务状态为失败
+            await self.repo.update_task_status(
+                task_id=task_id,
+                status=ParseTaskStatus.FAILED,
+                error_message=str(e)
+            )
+
+            raise
+
+    async def get_parse_result(self, task_id: str) -> Optional[ImageParseResult]:
+        """
+        获取解析结果
+
+        Args:
+            task_id: 任务ID
+
+        Returns:
+            ImageParseResult: 解析结果（如果存在）
+        """
+        task = await self.repo.get_by_id(task_id)
+
+        if not task:
+            return None
+
+        # 构建响应数据
+        text_regions = None
+        metadata = None
+
+        if task.text_regions:
+            text_regions = [
+                TextRegion(**region) for region in task.text_regions
+            ]
+
+        if task.parse_metadata:
+            metadata = ParseMetadata(**task.parse_metadata)
+
+        return ImageParseResult(
+            task_id=task.id,
+            slide_id=task.slide_id,
+            cos_key=task.cos_key,
+            status=task.status,
+            progress=task.progress,
+            text_regions=text_regions or [],
+            metadata=metadata
+        )
+
+    async def get_status(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """
+        获取任务状态（轻量级查询）
+
+        Args:
+            task_id: 任务ID
+
+        Returns:
+            Dict: 任务状态信息
+        """
+        task = await self.repo.get_by_id(task_id)
+
+        if not task:
+            return None
+
+        return {
+            "task_id": task.id,
+            "slide_id": task.slide_id,
+            "cos_key": task.cos_key,
+            "status": task.status,
+            "progress": task.progress,
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+            "error_message": task.error_message
+        }

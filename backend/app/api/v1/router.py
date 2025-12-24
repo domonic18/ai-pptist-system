@@ -13,7 +13,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     image_manager, image_upload, image_search, ai_model, generation,
     image_tags, tags, layout_optimization, image_proxy, tasks, annotation,
-    banana_generation
+    banana_generation, image_parsing
 )
 
 api_router = APIRouter()
@@ -34,3 +34,5 @@ api_router.include_router(tasks.router, prefix="/tasks", tags=["任务管理"])
 api_router.include_router(annotation.router, prefix="/annotation", tags=["自动标注"])
 # Banana PPT生成路由
 api_router.include_router(banana_generation.router, prefix="/banana_generation", tags=["Banana PPT生成"])
+# 图片解析路由
+api_router.include_router(image_parsing.router, prefix="/image_parsing", tags=["图片解析"])
