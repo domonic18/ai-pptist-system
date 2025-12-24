@@ -43,6 +43,8 @@ class ParseMetadata(BaseModel):
     parse_time: int = Field(..., description="解析耗时（毫秒）")
     ocr_engine: str = Field(..., description="OCR引擎名称")
     text_count: int = Field(..., description="识别的文字数量")
+    image_width: Optional[int] = Field(None, description="OCR识别所用原图宽度（像素）")
+    image_height: Optional[int] = Field(None, description="OCR识别所用原图高度（像素）")
     created_at: datetime = Field(..., description="创建时间")
     completed_at: Optional[datetime] = Field(None, description="完成时间")
 

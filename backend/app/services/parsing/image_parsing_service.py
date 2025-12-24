@@ -13,7 +13,6 @@ from app.repositories.image_parsing import ImageParsingRepository
 from app.services.ocr.multimodal_ocr_engine import MultimodalOCREngine
 from app.schemas.image_parsing import (
     TextRegion, ParseMetadata, ImageParseResult,
-    ParseRequest
 )
 from app.models.image_parse_task import ParseTaskStatus
 from app.core.log_utils import get_logger
@@ -97,6 +96,8 @@ class ImageParsingService:
             # 执行 OCR 识别（从COS Key）
             logger.info("开始OCR识别", extra={"task_id": task_id, "cos_key": cos_key})
             ocr_results = await ocr_engine.parse_from_cos_key(cos_key)
+            image_width = getattr(ocr_engine, "last_image_width", None)
+            image_height = getattr(ocr_engine, "last_image_height", None)
 
             # 构建文字区域数据
             text_regions = []
@@ -130,6 +131,8 @@ class ImageParsingService:
                 parse_time=parse_time,
                 ocr_engine="multimodal_ocr",
                 text_count=len(text_regions),
+                image_width=image_width,
+                image_height=image_height,
                 created_at=start_time,
                 completed_at=datetime.now()
             )

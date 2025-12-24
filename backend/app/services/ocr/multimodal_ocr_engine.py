@@ -78,6 +78,9 @@ class MultimodalOCREngine:
         self.model_name = model_name
         self._provider = None
         self._model_config = None
+        # 最近一次解析的图片尺寸（用于下游坐标换算）
+        self.last_image_width: Optional[int] = None
+        self.last_image_height: Optional[int] = None
 
         logger.info(
             "多模态OCR引擎初始化",
@@ -210,8 +213,33 @@ class MultimodalOCREngine:
                 }
             )
 
-            # 2. 调用多模态模型API（使用预签名URL）
-            result = await self._call_multimodal_api(presigned_url)
+            # 2. 获取图片实际尺寸（用于OCR坐标系统 & 前端坐标映射）
+            import io
+            import httpx
+            from PIL import Image
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(presigned_url)
+                resp.raise_for_status()
+                image_data = resp.content
+
+            # 使用PIL检测图片尺寸（避免模型/前端错误假定分辨率）
+            image = Image.open(io.BytesIO(image_data))
+            image_width, image_height = image.size
+            self.last_image_width = int(image_width)
+            self.last_image_height = int(image_height)
+            
+            logger.info(
+                "图片尺寸检测完成",
+                extra={
+                    "cos_key": cos_key,
+                    "width": image_width,
+                    "height": image_height
+                }
+            )
+
+            # 3. 调用多模态模型API（传递图片URL和实际尺寸，约束坐标范围）
+            result = await self._call_multimodal_api(presigned_url, int(image_width), int(image_height))
 
             logger.info(
                 "多模态OCR识别完成",
@@ -227,12 +255,14 @@ class MultimodalOCREngine:
             )
             raise
 
-    async def _call_multimodal_api(self, image_url: str) -> List[Dict]:
+    async def _call_multimodal_api(self, image_url: str, image_width: int, image_height: int) -> List[Dict]:
         """
         调用多模态模型API
 
         Args:
             image_url: 图片URL（可以是data URL或预签名URL）
+            image_width: 图片实际宽度（像素）
+            image_height: 图片实际高度（像素）
 
         Returns:
             List[Dict]: 识别结果列表
@@ -241,7 +271,17 @@ class MultimodalOCREngine:
         provider = await self._get_provider()
 
         # 加载OCR提示词
-        ocr_prompt = _load_ocr_prompt()
+        base_prompt = _load_ocr_prompt()
+        
+        # 在提示词中明确图片尺寸
+        ocr_prompt = f"""{base_prompt}
+
+**重要提示：图片实际尺寸**
+- 图片宽度：{image_width} 像素
+- 图片高度：{image_height} 像素
+- 所有坐标必须在此范围内：x ∈ [0, {image_width}], y ∈ [0, {image_height}]
+- 请确保所有bbox坐标都基于此实际尺寸，不要假定其他分辨率（如1920x1080）
+"""
 
         # 构建请求消息
         messages = [
@@ -257,7 +297,8 @@ class MultimodalOCREngine:
         logger.info(
             "调用多模态模型API",
             extra={
-                "model": self._model_config["ai_model_name"] if self._model_config else "unknown"
+                "model": self._model_config["ai_model_name"] if self._model_config else "unknown",
+                "image_size": f"{image_width}x{image_height}"
             }
         )
 
@@ -278,7 +319,8 @@ class MultimodalOCREngine:
             "多模态模型响应成功",
             extra={
                 "response_length": len(content),
-                "response_preview": content[:200]
+                "response_preview": content[:200],
+                "image_size": f"{image_width}x{image_height}"
             }
         )
 
