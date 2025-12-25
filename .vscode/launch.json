@@ -55,7 +55,7 @@
         "--loglevel=info",
         "--concurrency=4",
         "-Q",
-        "banana,quick,batch,maintenance,image_parsing,default"
+        "banana,quick,batch,maintenance,image_parsing,image_editing,default"
     ],
     "cwd": "${workspaceFolder}/backend",
     "console": "integratedTerminal",
