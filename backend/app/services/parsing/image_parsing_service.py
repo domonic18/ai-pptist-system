@@ -49,7 +49,8 @@ class ImageParsingService:
         self,
         slide_id: str,
         cos_key: str,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        task_id: Optional[str] = None
     ) -> ImageParseResult:
         """
         解析图片中的文字
@@ -58,12 +59,15 @@ class ImageParsingService:
             slide_id: 幻灯片ID
             cos_key: 图片COS Key
             user_id: 用户ID（可选）
+            task_id: 任务ID（可选，如果未提供则自动生成）
 
         Returns:
             ImageParseResult: 解析结果
         """
         start_time = datetime.now()
-        task_id = f"parse_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        # 如果未提供task_id，则自动生成
+        if task_id is None:
+            task_id = f"parse_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
         logger.info(
             "开始图片解析任务",
@@ -74,13 +78,15 @@ class ImageParsingService:
             }
         )
 
-        # 创建任务记录
-        await self.repo.create_task(
-            task_id=task_id,
-            slide_id=slide_id,
-            cos_key=cos_key,
-            user_id=user_id
-        )
+        # 仅在task_id不存在时创建新任务记录（避免重复创建）
+        existing_task = await self.repo.get_by_id(task_id)
+        if not existing_task:
+            await self.repo.create_task(
+                task_id=task_id,
+                slide_id=slide_id,
+                cos_key=cos_key,
+                user_id=user_id
+            )
 
         try:
             # 更新状态为处理中

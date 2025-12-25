@@ -4,16 +4,14 @@
 """
 
 from fastapi import APIRouter, HTTPException, Depends
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 from datetime import datetime
 
-from app.services.parsing.image_parsing_service import ImageParsingService
+from app.repositories.image_parsing import ImageParsingRepository
 from app.db.database import get_db
-from app.schemas.image_parsing import (
-    ParseRequest, ParseTaskResponse, ParseStatusResponse
-)
+from app.schemas.image_parsing import ParseRequest
 from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)
@@ -38,7 +36,8 @@ async def parse_image(
     """
     解析图片中的文字
 
-    提交图片解析任务，返回任务ID。前端需要轮询查询任务状态获取解析结果。
+    提交图片解析任务到Celery队列，返回任务ID。
+    前端需要轮询查询任务状态获取解析结果。
 
     Args:
         request: 包含slide_id和cos_key的请求
@@ -56,22 +55,47 @@ async def parse_image(
             }
         )
 
-        service = ImageParsingService(db)
+        repo = ImageParsingRepository(db)
 
-        # 执行解析（同步等待结果，MVP阶段简化）
-        result = await service.parse_image(
+        # 生成任务ID
+        task_id = f"parse_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+
+        # 创建任务记录
+        await repo.create_task(
+            task_id=task_id,
             slide_id=request.slide_id,
             cos_key=request.cos_key,
             user_id=user_id
         )
 
+        # 提交到Celery队列
+        from app.services.tasks.image_parsing_tasks import parse_image_task
+        celery_task = parse_image_task.apply_async(
+            kwargs={
+                "task_id": task_id,
+                "slide_id": request.slide_id,
+                "cos_key": request.cos_key,
+                "user_id": user_id
+            },
+            queue="image_parsing"
+        )
+
+        logger.info(
+            "图片解析任务已提交到Celery队列",
+            extra={
+                "task_id": task_id,
+                "celery_task_id": celery_task.id,
+                "slide_id": request.slide_id
+            }
+        )
+
         return {
             "success": True,
             "data": {
-                "task_id": result.task_id,
-                "status": result.status,
+                "task_id": task_id,
+                "status": "pending",
                 "estimated_time": 5,
-                "message": "解析完成" if result.status == "completed" else "处理中"
+                "message": "解析任务已创建，正在处理中"
             },
             "error": None,
             "timestamp": datetime.utcnow().isoformat(),
@@ -80,7 +104,7 @@ async def parse_image(
 
     except Exception as e:
         logger.error(
-            "图片解析失败",
+            "图片解析任务创建失败",
             extra={
                 "slide_id": request.slide_id,
                 "error": str(e)
@@ -92,7 +116,7 @@ async def parse_image(
             detail={
                 "success": False,
                 "data": None,
-                "error": {"message": str(e), "code": "PARSE_FAILED"},
+                "error": {"message": str(e), "code": "TASK_CREATE_FAILED"},
                 "timestamp": datetime.utcnow().isoformat(),
                 "request_id": str(uuid.uuid4())
             }
@@ -116,8 +140,9 @@ async def get_parse_status(
         Dict: 包含任务状态、进度、解析结果（如果已完成）
     """
     try:
-        service = ImageParsingService(db)
+        from app.services.parsing.image_parsing_service import ImageParsingService
 
+        service = ImageParsingService(db)
         result = await service.get_parse_result(task_id)
 
         if not result:
