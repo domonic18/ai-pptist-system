@@ -262,21 +262,6 @@ class TextRemovalService:
             )
             raise
 
-    async def _download_image_from_url(self, url: str) -> bytes:
-        """
-        从URL下载图片
-
-        Args:
-            url: 图片URL
-
-        Returns:
-            bytes: 图片数据
-        """
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            return response.content
-
     async def _upload_edited_image(
         self,
         image_data: bytes,
