@@ -20,8 +20,6 @@ logger = get_logger(__name__)
 
 @celery_app.task(
     bind=True,
-    max_retries=3,
-    retry_backoff=True,
     time_limit=300,  # 5分钟超时
     soft_time_limit=270,
     queue='image_editing'
@@ -126,22 +124,16 @@ def _handle_editing_error(
     """
     处理编辑失败的情况
 
-    如果还有重试次数，则重试；否则标记为失败
+    标记任务为失败状态，不进行重试
     """
     logger.error("图片编辑任务失败", extra={
         "task_id": task_id,
         "slide_id": slide_id,
-        "error": str(error),
-        "retry_count": self.request.retries
+        "error": str(error)
     })
 
     # 标记任务失败状态到数据库
     _mark_task_as_failed(task_id, slide_id, error)
-
-    # 还有重试次数，触发重试
-    if self.request.retries < self.max_retries:
-        countdown = 5 * (2 ** self.request.retries)  # 指数退避
-        raise self.retry(exc=error, countdown=countdown)
 
     return {
         "task_id": task_id,
@@ -185,8 +177,6 @@ def _mark_task_as_failed(task_id: str, slide_id: str, error: Exception):
 
 @celery_app.task(
     bind=True,
-    max_retries=2,
-    retry_backoff=True,
     time_limit=600,  # 10分钟超时
     soft_time_limit=540,
     queue='image_editing'
@@ -196,7 +186,8 @@ def full_editing_task(
     task_id: str,
     slide_id: str,
     cos_key: str,
-    user_id: str = None
+    user_id: str = None,
+    ai_model_id: str = None
 ) -> Dict[str, Any]:
     """
     完整图片编辑的 Celery 任务
@@ -208,6 +199,7 @@ def full_editing_task(
         slide_id: 幻灯片ID
         cos_key: 图片COS Key
         user_id: 用户ID（可选）
+        ai_model_id: AI模型ID（可选，用于文字去除）
 
     Returns:
         编辑结果字典
@@ -216,6 +208,7 @@ def full_editing_task(
         "task_id": task_id,
         "slide_id": slide_id,
         "cos_key": cos_key,
+        "ai_model_id": ai_model_id,
         "celery_task_id": self.request.id
     })
 
@@ -224,7 +217,8 @@ def full_editing_task(
             task_id=task_id,
             slide_id=slide_id,
             cos_key=cos_key,
-            user_id=user_id
+            user_id=user_id,
+            ai_model_id=ai_model_id
         )
     except Exception as exc:
         return _handle_editing_error(
@@ -239,13 +233,14 @@ def _execute_full_editing(
     task_id: str,
     slide_id: str,
     cos_key: str,
-    user_id: str = None
+    user_id: str = None,
+    ai_model_id: str = None
 ) -> Dict[str, Any]:
     """
     执行完整图片编辑的核心逻辑
 
     1. 混合OCR识别
-    2. 文字去除（第二阶段实现）
+    2. 文字去除
     """
     from app.db.database import AsyncSessionLocal
     from app.services.editing.image_editing_service import ImageEditingService
@@ -265,18 +260,30 @@ def _execute_full_editing(
                     task_id=task_id
                 )
 
-                # 步骤2: 文字去除（第二阶段实现）
-                # 目前暂时跳过，直接返回OCR结果
-                logger.info("步骤2: 文字去除功能待实现", extra={"task_id": task_id})
+                # 步骤2: 文字去除
+                logger.info("步骤2: 开始文字去除", extra={"task_id": task_id, "ai_model_id": ai_model_id})
+                removal_result = await service.remove_text_from_image(
+                    slide_id=slide_id,
+                    cos_key=cos_key,
+                    ai_model_id=ai_model_id,
+                    user_id=user_id,
+                    task_id=task_id,
+                    ocr_result=ocr_result
+                )
 
-                return ocr_result
+                # 返回完整结果
+                return {
+                    "ocr_result": ocr_result,
+                    "removal_result": removal_result
+                }
 
         result = runner.run(do_editing())
 
         logger.info("完整图片编辑完成", extra={
             "task_id": task_id,
             "slide_id": slide_id,
-            "text_count": len(result.text_regions) if result.text_regions else 0
+            "text_count": len(result.get("ocr_result", {}).text_regions) if result.get("ocr_result") else 0,
+            "edited_cos_key": result.get("removal_result", {}).get("edited_cos_key")
         })
 
         return {
@@ -285,6 +292,6 @@ def _execute_full_editing(
             "cos_key": cos_key,
             "status": "completed",
             "progress": 100,
-            "text_count": len(result.text_regions) if result.text_regions else 0,
-            "note": "文字去除功能待第二阶段实现"
+            "text_count": len(result.get("ocr_result", {}).text_regions) if result.get("ocr_result") else 0,
+            "edited_cos_key": result.get("removal_result", {}).get("edited_cos_key")
         }

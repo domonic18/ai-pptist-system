@@ -144,6 +144,7 @@ class ParseAndRemoveRequest(BaseModel):
     """一步完成：OCR识别 + 文字去除请求"""
     slide_id: str = Field(..., description="幻灯片ID")
     cos_key: str = Field(..., description="图片COS Key")
+    ai_model_id: Optional[str] = Field(None, description="AI模型ID（用于文字去除，不提供则使用默认模型）")
 
 
 class HybridOCRParseRequest(BaseModel):
@@ -156,7 +157,8 @@ class RemoveTextRequest(BaseModel):
     """仅去除文字请求"""
     slide_id: str = Field(..., description="幻灯片ID")
     cos_key: str = Field(..., description="原始图片COS Key")
-    ocr_task_id: str = Field(..., description="OCR任务ID（用于获取文字位置）")
+    ai_model_id: Optional[str] = Field(None, description="AI模型ID（不提供则使用默认模型）")
+    ocr_task_id: Optional[str] = Field(None, description="OCR任务ID（用于获取文字位置，可选）")
 
 
 # ============================================================================

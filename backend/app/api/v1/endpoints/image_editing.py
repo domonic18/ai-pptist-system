@@ -236,7 +236,7 @@ async def parse_and_remove_text(
     同时执行混合OCR识别和文字去除，返回完整结果
 
     Args:
-        request: 包含slide_id和cos_key的请求
+        request: 包含slide_id、cos_key和ai_model_id的请求
         user_id: 当前用户ID
 
     Returns:
@@ -247,7 +247,8 @@ async def parse_and_remove_text(
             "收到图片编辑请求（一步完成）",
             extra={
                 "slide_id": request.slide_id,
-                "cos_key": request.cos_key
+                "cos_key": request.cos_key,
+                "ai_model_id": request.ai_model_id
             }
         )
 
@@ -271,7 +272,8 @@ async def parse_and_remove_text(
                 "task_id": task_id,
                 "slide_id": request.slide_id,
                 "cos_key": request.cos_key,
-                "user_id": user_id
+                "user_id": user_id,
+                "ai_model_id": request.ai_model_id
             },
             queue="image_editing"
         )
@@ -281,7 +283,8 @@ async def parse_and_remove_text(
             extra={
                 "task_id": task_id,
                 "celery_task_id": celery_task.id,
-                "slide_id": request.slide_id
+                "slide_id": request.slide_id,
+                "ai_model_id": request.ai_model_id
             }
         )
 
