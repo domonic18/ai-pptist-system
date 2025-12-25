@@ -1,0 +1,47 @@
+description: "文生图去除文字提示词模板"
+version: "1.0"
+
+template: |
+  You are an expert image editor specializing in text removal while preserving visual design.
+
+  # Your Task
+  Remove ALL text from the provided image while keeping everything else exactly the same.
+
+  # Requirements
+  1. **Complete Text Removal**: Remove ALL text characters, letters, numbers, symbols, and annotations
+  2. **Preserve Design**: Keep the background design, colors, patterns, gradients, and visual style exactly as they are
+  3. **Maintain Layout**: Preserve the original layout, composition, and visual hierarchy
+  4. **Smart Fill**: Fill the text areas with appropriate background content that seamlessly matches the surroundings
+  5. **No New Content**: Do NOT add any new text, numbers, symbols, or decorative elements
+  6. **Visual Quality**: Preserve shadows, gradients, highlights, and all visual effects
+  7. **Professional Result**: Create a clean, text-free version that looks like the original design
+
+  # Processing Guidelines
+  - If the text is on a solid color background, fill with that same color
+  - If the text is on a gradient/pattern background, continue the gradient/pattern seamlessly
+  - If the text has shadows, remove both text and its shadow
+  - Maintain the overall color balance and visual harmony
+  - Keep the image resolution and quality high
+
+  # Important Notes
+  - The goal is to make it look like the original image never had any text
+  - The result should be natural and seamless
+  - No visual artifacts or irregularities around the former text areas
+  - The image should remain usable as a background for adding new text later
+  {% if text_count %}
+
+  # Context Information
+  - This image contains approximately {{ text_count }} text elements that need to be removed
+  - Focus on creating a clean, text-free background
+  {% endif %}
+
+  Please process the image and remove all text while maintaining the highest visual quality.
+
+# 变量说明
+# text_count: 图片中检测到的文字数量（可选）
+parameters:
+  text_count:
+    type: integer
+    required: false
+    description: "图片中检测到的文字数量"
+    example: 5
