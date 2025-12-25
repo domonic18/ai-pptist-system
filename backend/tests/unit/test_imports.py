@@ -30,7 +30,7 @@ class TestModuleImports:
     def test_service_imports(self):
         """测试服务模块导入"""
         from app.services.image.management_service import ManagementService
-        from app.core.storage.cos_storage import COSStorage
+        from app.core.storage import COSStorage
         from app.services.image.upload_service import ImageUploadService
         assert ManagementService is not None
         assert COSStorage is not None

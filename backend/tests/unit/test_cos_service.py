@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 import os
 from datetime import datetime, timedelta
 
-from app.core.storage.cos_storage import COSStorage
+from app.core.storage import COSStorage
 from app.core.config import settings
 from app.core.cos import COSConfig, get_storage_path
 
