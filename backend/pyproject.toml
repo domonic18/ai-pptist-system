@@ -70,6 +70,7 @@ dependencies = [
     "aiohttp>=3.8.0",
     "jieba>=0.42.1",
     "beautifulsoup4>=4.12.0",  # HTML解析
+    "Levenshtein>=0.25.1",  # 字符串相似度计算（混合OCR）
 ]
 
 # 可选依赖组

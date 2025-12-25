@@ -20,6 +20,7 @@ celery_app = Celery(
         "app.services.tasks.refresh_tasks",
         "app.services.tasks.banana_generation_tasks",
         "app.services.tasks.image_parsing_tasks",
+        "app.services.tasks.image_editing_tasks",
     ],
 )
 
@@ -67,6 +68,8 @@ celery_app.conf.update(
         "app.services.tasks.banana_generation_tasks.generate_single_slide_task": {"queue": "banana"},
         "app.services.tasks.banana_generation_tasks.generate_batch_slides_task": {"queue": "banana"},
         "app.services.tasks.image_parsing_tasks.parse_image_task": {"queue": "image_parsing"},
+        "app.services.tasks.image_editing_tasks.hybrid_ocr_task": {"queue": "image_editing"},
+        "app.services.tasks.image_editing_tasks.full_editing_task": {"queue": "image_editing"},
     },
 
     # 队列配置
@@ -77,6 +80,7 @@ celery_app.conf.update(
         Queue("maintenance", routing_key="maintenance"),
         Queue("banana", routing_key="banana"),
         Queue("image_parsing", routing_key="image_parsing"),
+        Queue("image_editing", routing_key="image_editing"),
         Queue("default", routing_key="default"),
     ),
 
