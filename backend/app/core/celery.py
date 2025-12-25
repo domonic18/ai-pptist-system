@@ -48,9 +48,9 @@ class CeleryManager:
             logger.info(
                 "Celery configured. Use the following command to start workers:\n"
                 "  celery -A app.services.tasks worker --loglevel=info "
-                "-Q banana,quick,batch,maintenance,default"
+                "-Q banana,quick,batch,maintenance,image_parsing,default"
             )
-            logger.info("Celery queues: banana, quick, batch, maintenance, default")
+            logger.info("Celery queues: banana, quick, batch, maintenance, image_parsing, default")
             self._is_running = True
         except Exception as e:
             logger.error(f"Failed to initialize Celery: {e}")
@@ -68,7 +68,7 @@ class CeleryManager:
         """获取Celery状态"""
         return {
             "status": "running" if self._is_running else "stopped",
-            "queues": ["banana", "quick", "batch", "maintenance", "default"],
+            "queues": ["banana", "quick", "batch", "maintenance", "image_parsing", "default"],
             "broker_url": self._app.conf.broker_url if self._app else None,
             "backend_url": self._app.conf.result_backend if self._app else None,
         }

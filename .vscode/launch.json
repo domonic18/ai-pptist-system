@@ -54,7 +54,8 @@
         "worker",
         "--loglevel=info",
         "--concurrency=4",
-        "--queues=banana,default,quick,batch,maintenance"
+        "-Q",
+        "banana,quick,batch,maintenance,image_parsing,default"
     ],
     "cwd": "${workspaceFolder}/backend",
     "console": "integratedTerminal",
@@ -93,7 +94,6 @@
         "Celery: 启动Worker进程",
         "Celery: 启动Beat调度器"
       ],
-      "preLaunchTask": "install all dependencies",
       "stopAll": true
     }
   ]
