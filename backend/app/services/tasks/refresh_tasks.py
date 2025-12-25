@@ -4,7 +4,6 @@ import logging
 from typing import List, Optional
 from datetime import datetime, timedelta
 from celery import group, chain
-from celery.exceptions import Retry
 from celery.result import AsyncResult
 
 from .celery_app import celery_app
@@ -13,12 +12,7 @@ from app.services.cache.image_url_service import ImageURLService
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_kwargs={"max_retries": 3, "countdown": 60},
-    retry_backoff=True,
-)
+@celery_app.task(bind=True)
 def refresh_url_cache(self, image_key: str, force_refresh: bool = False) -> dict:  # type: ignore
     """刷新单个图片URL缓存
 
@@ -64,10 +58,7 @@ def refresh_url_cache(self, image_key: str, force_refresh: bool = False) -> dict
         raise
 
 
-@celery_app.task(
-    bind=True,
-    max_retries=3,
-)
+@celery_app.task(bind=True)
 def batch_refresh_url_cache(
     self,
     image_keys: List[str],
@@ -138,7 +129,7 @@ def batch_refresh_url_cache(
 
     except Exception as e:
         logger.error(f"Batch refresh failed: {e}")
-        raise self.retry(exc=e)
+        raise
 
 
 @celery_app.task()

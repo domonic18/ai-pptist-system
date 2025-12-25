@@ -13,7 +13,7 @@ from tencentcloud.common.profile.http_profile import HttpProfile
 from tencentcloud.ocr.v20181119 import ocr_client, models as ocr_models
 
 from app.core.log_utils import get_logger
-from app.core.storage import get_storage_service
+from app.core.storage import download_image_by_key, get_storage_service
 
 logger = get_logger(__name__)
 
@@ -84,18 +84,18 @@ class TencentOCRSDKEngine:
         try:
             logger.info("开始OCR识别", extra={"cos_key": cos_key})
 
-            # 1. 通过统一存储服务从COS拉取图片
+            # 1. 通过统一下载方式从COS拉取图片
             storage = get_storage_service()
-            download_result = await storage.download(cos_key)
+            image_data, image_format = await download_image_by_key(cos_key, storage)
 
             # 2. 直接转换为base64，不做任何预处理
-            img_base64 = base64.b64encode(download_result.data).decode()
+            img_base64 = base64.b64encode(image_data).decode()
 
             logger.info(
                 "图片数据准备完成",
                 extra={
                     "cos_key": cos_key,
-                    "data_size": len(download_result.data),
+                    "data_size": len(image_data),
                     "base64_size": len(img_base64)
                 }
             )

@@ -9,7 +9,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.image import ImageRepository
-from app.core.storage.cos_storage import COSStorage
+from app.core.storage import COSStorage
 from app.core.config import settings
 from app.core.log_utils import get_logger
 

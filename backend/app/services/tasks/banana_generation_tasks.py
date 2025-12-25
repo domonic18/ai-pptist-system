@@ -23,8 +23,6 @@ logger = get_logger(__name__)
 
 @celery_app.task(
     bind=True,
-    max_retries=3,
-    retry_backoff=True,
     time_limit=600,
     soft_time_limit=540,
     queue='banana'
@@ -160,24 +158,18 @@ def _handle_generation_error(
 ) -> Dict[str, Any]:
     """
     处理生成失败的情况
-    
-    如果还有重试次数，则重试；否则标记为失败
+
+    标记任务为失败状态，不进行重试
     """
     logger.error("幻灯片生成失败", extra={
         "task_id": task_id,
         "slide_index": slide_index,
-        "error": str(error),
-        "retry_count": self.request.retries
+        "error": str(error)
     })
 
-    # 还有重试次数，触发重试
-    if self.request.retries < self.max_retries:
-        countdown = 5 * (2 ** self.request.retries)  # 指数退避
-        raise self.retry(exc=error, countdown=countdown)
-    
-    # 重试次数用尽，标记失败
+    # 标记失败
     _mark_slide_as_failed(task_id, slide_index, error)
-    
+
     return {
         "slide_index": slide_index,
         "status": "failed",

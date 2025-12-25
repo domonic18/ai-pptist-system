@@ -21,8 +21,6 @@ logger = get_logger(__name__)
 
 @celery_app.task(
     bind=True,
-    max_retries=3,
-    retry_backoff=True,
     time_limit=300,  # 5分钟超时
     soft_time_limit=270,
     queue='image_parsing'
@@ -134,22 +132,16 @@ def _handle_parsing_error(
     """
     处理解析失败的情况
 
-    如果还有重试次数，则重试；否则标记为失败
+    标记任务为失败状态，不进行重试
     """
     logger.error("图片解析失败", extra={
         "task_id": task_id,
         "slide_id": slide_id,
-        "error": str(error),
-        "retry_count": self.request.retries
+        "error": str(error)
     })
 
     # 标记任务失败状态到数据库
     _mark_task_as_failed(task_id, slide_id, error)
-
-    # 还有重试次数，触发重试
-    if self.request.retries < self.max_retries:
-        countdown = 5 * (2 ** self.request.retries)  # 指数退避
-        raise self.retry(exc=error, countdown=countdown)
 
     return {
         "task_id": task_id,

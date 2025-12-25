@@ -8,7 +8,7 @@ from typing import List, Dict, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.log_utils import get_logger
-from app.core.storage import get_storage_service
+from app.core.storage import get_storage_service, download_image_by_key
 from app.services.ai_model.management_service import ManagementService
 from app.core.ai.factory import AIProviderFactory
 from app.core.ai.models import ModelCapability
@@ -201,10 +201,10 @@ class MultimodalOCREngine:
         try:
             logger.info("开始多模态OCR识别", extra={"cos_key": cos_key})
 
-            # 1. 生成预签名URL（避免Base64编码导致的截断问题）
+            # 1. 下载图片并获取预签名URL（使用统一下载方法）
             storage = get_storage_service()
             presigned_url = await storage.generate_url(cos_key, expires=3600, operation="get")
-            
+
             logger.info(
                 "预签名URL生成成功",
                 extra={
@@ -213,22 +213,18 @@ class MultimodalOCREngine:
                 }
             )
 
-            # 2. 获取图片实际尺寸（用于OCR坐标系统 & 前端坐标映射）
+            # 2. 下载图片并获取实际尺寸（使用统一下载方法）
+            image_data, image_format = await download_image_by_key(cos_key, storage)
+
+            # 获取图片尺寸（用于OCR坐标系统 & 前端坐标映射）
             import io
-            import httpx
             from PIL import Image
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(presigned_url)
-                resp.raise_for_status()
-                image_data = resp.content
-
-            # 使用PIL检测图片尺寸（避免模型/前端错误假定分辨率）
             image = Image.open(io.BytesIO(image_data))
             image_width, image_height = image.size
             self.last_image_width = int(image_width)
             self.last_image_height = int(image_height)
-            
+
             logger.info(
                 "图片尺寸检测完成",
                 extra={

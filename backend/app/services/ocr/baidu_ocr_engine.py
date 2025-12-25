@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 import httpx
 
 from app.core.log_utils import get_logger
-from app.core.storage import get_storage_service
+from app.core.storage import get_storage_service, download_image_by_key
 
 logger = get_logger(__name__)
 
@@ -88,7 +88,8 @@ class BaiduOCREngine:
     ) -> List[Dict]:
         """
         从COS Key解析图片
-        通过预签名URL下载图片并转为Base64后识别
+
+        使用统一下载方式下载图片并转为Base64后识别
 
         Args:
             cos_key: 图片的COS Key
@@ -96,34 +97,20 @@ class BaiduOCREngine:
         try:
             logger.info("开始从COS Key进行百度云OCR识别", extra={"cos_key": cos_key})
 
-            # 1. 生成预签名URL（有效期1小时）
+            # 1. 使用统一的下载方式下载图片
             storage = get_storage_service()
-            presigned_url = await storage.generate_url(cos_key, expires=3600, operation="get")
-            
-            logger.info(
-                "预签名URL生成成功",
-                extra={
-                    "cos_key": cos_key,
-                    "url_prefix": presigned_url[:100]
-                }
-            )
-
-            # 2. 通过HTTP请求下载图片
-            async with httpx.AsyncClient(timeout=30.0, trust_env=False) as client:
-                response = await client.get(presigned_url)
-                response.raise_for_status()
-                image_data = response.content
+            image_data, image_format = await download_image_by_key(cos_key, storage)
 
             logger.info(
                 "图片下载成功",
                 extra={
                     "cos_key": cos_key,
                     "image_size": len(image_data),
-                    "content_type": response.headers.get("content-type")
+                    "format": image_format
                 }
             )
 
-            # 3. 转换为base64
+            # 2. 转换为base64
             img_base64 = base64.b64encode(image_data).decode()
 
             logger.info(
@@ -134,7 +121,7 @@ class BaiduOCREngine:
                 }
             )
 
-            # 4. 调用OCR API
+            # 3. 调用OCR API
             result = await self._call_ocr_api(img_base64)
 
             logger.info(
@@ -144,12 +131,6 @@ class BaiduOCREngine:
 
             return result
 
-        except httpx.HTTPError as e:
-            logger.error(
-                "HTTP请求下载图片失败",
-                extra={"cos_key": cos_key, "error": str(e)}
-            )
-            raise Exception(f"下载图片失败: {str(e)}")
         except Exception as e:
             logger.error(
                 "百度云OCR识别失败（COS Key）",
