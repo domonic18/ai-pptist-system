@@ -8,7 +8,6 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from PIL import Image
-import httpx
 
 from app.core.log_utils import get_logger
 from app.core.storage import download_image_by_key, get_storage_service
@@ -209,19 +208,18 @@ class TextRemovalService:
             if not result or not result.image:
                 raise Exception("图片生成失败：返回结果为空")
 
-            # 获取生成图片的 URL
-            edited_image_url = result.image_url
-
             logger.info(
                 "文生图API调用成功",
                 extra={
-                    "edited_image_url": edited_image_url[:100] if len(edited_image_url) > 100 else edited_image_url
+                    "image_size": result.image.size if result.image else None
                 }
             )
 
-            # 步骤5: 下载生成的图片
-            logger.info("步骤5: 下载生成的图片")
-            edited_image_data = await self._download_image_from_url(edited_image_url)
+            # 步骤5: 将 PIL Image 转换为字节数据（与 banana_slide_generator 一致，直接使用 result.image）
+            logger.info("步骤5: 处理生成的图片")
+            img_byte_arr = io.BytesIO()
+            result.image.save(img_byte_arr, format='PNG')
+            edited_image_data = img_byte_arr.getvalue()
 
             # 步骤6: 上传到COS
             logger.info("步骤6: 上传编辑后的图片到COS")
