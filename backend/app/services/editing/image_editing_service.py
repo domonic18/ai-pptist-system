@@ -328,7 +328,6 @@ class ImageEditingService:
                 task_id=task_id,
                 status=EditingTaskStatus.COMPLETED,
                 progress=100,
-                edited_cos_key=removal_result["edited_cos_key"],
                 removal_result=removal_result
             )
 
