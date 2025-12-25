@@ -4,36 +4,18 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
-from dataclasses import dataclass
-from datetime import datetime
 
-
-@dataclass
-class UploadResult:
-    """上传结果"""
-    key: str
-    url: str
-    size: int
-    mime_type: str
-    bucket: Optional[str] = None
-    region: Optional[str] = None
-    etag: Optional[str] = None
-    uploaded_at: Optional[datetime] = None
-
-
-@dataclass
-class DownloadResult:
-    """下载结果"""
-    data: bytes
-    size: int
-    mime_type: str
-    last_modified: Optional[datetime] = None
-    etag: Optional[str] = None
+from app.core.storage.exceptions import StorageError
+from app.core.storage.models import DownloadResult, MetadataResult, UploadResult
 
 
 class BaseStorage(ABC):
-    """存储抽象基类"""
+    """
+    存储抽象基类
+
+    定义统一的存储接口，支持多种存储后端（COS、OSS、S3等）。
+    所有实现类必须实现抽象方法。
+    """
 
     @abstractmethod
     async def upload(
@@ -41,7 +23,7 @@ class BaseStorage(ABC):
         data: bytes,
         key: str,
         mime_type: str,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: dict | None = None
     ) -> UploadResult:
         """
         上传文件
@@ -58,7 +40,7 @@ class BaseStorage(ABC):
         Raises:
             StorageError: 上传失败时抛出
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     async def download(self, key: str) -> DownloadResult:
@@ -74,7 +56,7 @@ class BaseStorage(ABC):
         Raises:
             StorageError: 下载失败时抛出
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     async def delete(self, key: str) -> bool:
@@ -90,7 +72,7 @@ class BaseStorage(ABC):
         Raises:
             StorageError: 删除失败时抛出
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     async def generate_url(
@@ -100,7 +82,7 @@ class BaseStorage(ABC):
         operation: str = "get"
     ) -> str:
         """
-        生成访问URL
+        生成预签名访问URL
 
         Args:
             key: 存储键
@@ -108,12 +90,12 @@ class BaseStorage(ABC):
             operation: 操作类型（get/put等）
 
         Returns:
-            str: 访问URL
+            str: 预签名URL
 
         Raises:
             StorageError: 生成URL失败时抛出
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     async def exists(self, key: str) -> bool:
@@ -126,10 +108,10 @@ class BaseStorage(ABC):
         Returns:
             bool: 文件是否存在
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
-    async def get_metadata(self, key: str) -> Dict[str, Any]:
+    async def get_metadata(self, key: str) -> MetadataResult:
         """
         获取文件元数据
 
@@ -137,24 +119,12 @@ class BaseStorage(ABC):
             key: 存储键
 
         Returns:
-            Dict[str, Any]: 文件元数据
+            MetadataResult: 文件元数据
 
         Raises:
             StorageError: 获取元数据失败时抛出
         """
-        pass
+        raise NotImplementedError
 
 
-class StorageError(Exception):
-    """存储操作异常"""
-
-    def __init__(self, message: str, code: Optional[str] = None, details: Optional[Dict] = None):
-        super().__init__(message)
-        self.message = message
-        self.code = code
-        self.details = details or {}
-
-    def __str__(self) -> str:
-        if self.code:
-            return f"[{self.code}] {self.message}"
-        return self.message
+__all__ = ['BaseStorage']
