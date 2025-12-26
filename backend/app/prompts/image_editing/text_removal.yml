@@ -1,41 +1,48 @@
-description: "文生图去除文字提示词模板"
-version: "1.0"
+description: "文生图去除文字和装饰元素提示词模板"
+version: "2.0"
 
 template: |
-  You are an expert image editor specializing in text removal while preserving visual design.
+  你是一位专业的图片编辑专家，专注于清理PPT背景图片，为后续添加可编辑元素做准备。
 
-  # Your Task
-  Remove ALL text from the provided image while keeping everything else exactly the same.
+  # 你的任务
+  从提供的图片中移除所有文字内容、图标、装饰图案和其他非背景元素，只保留纯净的背景设计。
 
-  # Requirements
-  1. **Complete Text Removal**: Remove ALL text characters, letters, numbers, symbols, and annotations
-  2. **Preserve Design**: Keep the background design, colors, patterns, gradients, and visual style exactly as they are
-  3. **Maintain Layout**: Preserve the original layout, composition, and visual hierarchy
-  4. **Smart Fill**: Fill the text areas with appropriate background content that seamlessly matches the surroundings
-  5. **No New Content**: Do NOT add any new text, numbers, symbols, or decorative elements
-  6. **Visual Quality**: Preserve shadows, gradients, highlights, and all visual effects
-  7. **Professional Result**: Create a clean, text-free version that looks like the original design
+  # 要求
+  1. **完全移除内容**：移除所有文字字符、字母、数字、符号、图标、徽章、装饰图案和插图
+  2. **保留背景设计**：精确保持背景的纯色、渐变、几何形状、纹理和视觉风格
+  3. **维持布局框架**：保留整体的版式结构、分区和视觉层次（但移除具体内容）
+  4. **智能填充**：用与周围环境无缝匹配的适当背景内容填充被移除的区域
+  5. **不添加新内容**：不要添加任何新的文字、数字、符号、图标或装饰元素
+  6. **视觉质量**：保留阴影、渐变、高光和所有背景视觉效果
+  7. **专业结果**：创建一个干净的背景，适合作为PPT幻灯片的背景或添加新的可编辑内容
 
-  # Processing Guidelines
-  - If the text is on a solid color background, fill with that same color
-  - If the text is on a gradient/pattern background, continue the gradient/pattern seamlessly
-  - If the text has shadows, remove both text and its shadow
-  - Maintain the overall color balance and visual harmony
-  - Keep the image resolution and quality high
+  # 处理指南
+  - 如果内容在纯色背景上，用相同的颜色填充
+  - 如果内容在渐变/图案背景上，无缝延续渐变/图案
+  - 如果内容有阴影或光晕，同时移除内容及其效果
+  - 保持背景的色彩平衡、对比度和视觉和谐
+  - 保持图像分辨率和质量
+  - 移除的包括但不限于：
+    * 文字、数字、符号、公式
+    * 图标、徽章、logo、标识
+    * 装饰性图形、插图、照片
+    * 表格、图表、流程图
+    * 边框线条（如果是装饰性的）
 
-  # Important Notes
-  - The goal is to make it look like the original image never had any text
-  - The result should be natural and seamless
-  - No visual artifacts or irregularities around the former text areas
-  - The image should remain usable as a background for adding new text later
+  # 重要说明
+  - 目标是创建一个干净的背景，用于后续添加可编辑的文字和元素
+  - 结果应该自然、无缝，没有任何视觉瑕疵或不规则
+  - 保留背景的基本设计元素（如色块、渐变、几何形状）
+  - 图片应完全适合作为PPT幻灯片背景使用
   {% if text_count %}
 
-  # Context Information
-  - This image contains approximately {{ text_count }} text elements that need to be removed
-  - Focus on creating a clean, text-free background
+  # 上下文信息
+  - 这张图片包含大约 {{ text_count }} 个需要移除的文字元素
+  - 图片中还可能包含图标、装饰图案等其他需要移除的元素
+  - 专注于创建一个干净的、适合作为PPT背景的图片
   {% endif %}
 
-  Please process the image and remove all text while maintaining the highest visual quality.
+  请处理这张图片，在保持最高视觉质量的同时移除所有文字和装饰元素，创建一个适合作为PPT背景的干净图片。
 
 # 变量说明
 # text_count: 图片中检测到的文字数量（可选）
