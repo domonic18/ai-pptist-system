@@ -12,12 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.image_editing import ImageEditingRepository
 from app.services.ocr.hybrid_ocr_fusion import HybridOCRFusion
 from app.services.editing.text_removal_service import TextRemovalService
+from app.services.editing.mineru_multimodal_fusion_service import MinerUMultimodalFusionService
 from app.models.image_editing_task import EditingTaskStatus
 from app.schemas.image_editing import (
     HybridOCRResult,
     TextRemovalResult,
     EditingTaskMetadata,
 )
+from app.core.config.config import settings
 from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)
@@ -36,6 +38,7 @@ class ImageEditingService:
         self.db = db
         self.repo = ImageEditingRepository(db)
         self.ocr_fusion = None
+        self.mineru_fusion = None
         self.text_removal_service = None
 
     def _get_ocr_fusion(self) -> HybridOCRFusion:
@@ -49,6 +52,17 @@ class ImageEditingService:
             self.ocr_fusion = HybridOCRFusion(db=self.db)
         return self.ocr_fusion
 
+    def _get_mineru_fusion(self) -> MinerUMultimodalFusionService:
+        """
+        获取MinerU融合服务实例（单例模式）
+
+        Returns:
+            MinerUMultimodalFusionService: MinerU融合服务实例
+        """
+        if self.mineru_fusion is None:
+            self.mineru_fusion = MinerUMultimodalFusionService(db=self.db)
+        return self.mineru_fusion
+
     def _get_text_removal_service(self) -> TextRemovalService:
         """
         获取文字去除服务实例（单例模式）
@@ -59,6 +73,111 @@ class ImageEditingService:
         if self.text_removal_service is None:
             self.text_removal_service = TextRemovalService(db=self.db)
         return self.text_removal_service
+
+    async def parse_with_mineru(
+        self,
+        slide_id: str,
+        cos_key: str,
+        user_id: Optional[str] = None,
+        task_id: Optional[str] = None,
+        enable_formula: bool = True,
+        enable_table: bool = True,
+        enable_style_recognition: bool = True
+    ) -> HybridOCRResult:
+        """
+        使用MinerU + 多模态识别图片中的文字
+
+        Args:
+            slide_id: 幻灯片ID
+            cos_key: 图片COS Key
+            user_id: 用户ID（可选）
+            task_id: 任务ID（可选，如果未提供则自动生成）
+            enable_formula: 是否识别公式
+            enable_table: 是否识别表格
+            enable_style_recognition: 是否启用样式识别（多模态）
+
+        Returns:
+            HybridOCRResult: MinerU+多模态融合识别结果
+        """
+        start_time = datetime.now()
+
+        # 如果未提供task_id，则自动生成
+        if task_id is None:
+            task_id = f"edit_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+
+        logger.info(
+            "开始MinerU识别任务",
+            extra={
+                "task_id": task_id,
+                "slide_id": slide_id,
+                "cos_key": cos_key,
+                "enable_style_recognition": enable_style_recognition
+            }
+        )
+
+        # 仅在task_id不存在时创建新任务记录（避免重复创建）
+        existing_task = await self.repo.get_by_id(task_id)
+        if not existing_task:
+            await self.repo.create_task(
+                task_id=task_id,
+                slide_id=slide_id,
+                original_cos_key=cos_key,
+                user_id=user_id
+            )
+
+        try:
+            # 更新状态为OCR处理中
+            await self.repo.update_task_status(
+                task_id=task_id,
+                status=EditingTaskStatus.OCR_PROCESSING,
+                progress=10
+            )
+
+            # 获取MinerU融合服务
+            mineru_fusion = self._get_mineru_fusion()
+
+            # 执行MinerU识别
+            logger.info("开始MinerU识别", extra={"task_id": task_id, "cos_key": cos_key})
+            result = await mineru_fusion.recognize_image(
+                cos_key=cos_key,
+                task_id=task_id,
+                slide_id=slide_id,
+                enable_formula=enable_formula,
+                enable_table=enable_table,
+                enable_style_recognition=enable_style_recognition
+            )
+
+            # 更新任务状态
+            # 使用 json.loads(result.json()) 确保 datetime 字段被正确序列化为字符串
+            await self.repo.update_task_status(
+                task_id=task_id,
+                status=EditingTaskStatus.COMPLETED,
+                progress=50,  # OCR完成，进度50%
+                ocr_result=json.loads(result.json())
+            )
+
+            logger.info(
+                "MinerU识别完成",
+                extra={
+                    "task_id": task_id,
+                    "text_count": len(result.text_regions),
+                    "parse_time": result.metadata.parse_time_ms
+                }
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error("MinerU识别失败", extra={"task_id": task_id, "error": str(e)})
+
+            # 更新任务状态为失败
+            await self.repo.update_task_status(
+                task_id=task_id,
+                status=EditingTaskStatus.FAILED,
+                error_message=str(e)
+            )
+
+            raise
 
     async def parse_with_hybrid_ocr(
         self,

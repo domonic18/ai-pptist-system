@@ -295,3 +295,148 @@ def _execute_full_editing(
             "text_count": len(result.get("ocr_result", {}).text_regions) if result.get("ocr_result") else 0,
             "edited_cos_key": result.get("removal_result", {}).get("edited_cos_key")
         }
+
+
+# ============================================================================
+# MinerU识别任务
+# ============================================================================
+
+@celery_app.task(
+    bind=True,
+    time_limit=600,  # 10分钟超时
+    soft_time_limit=540,
+    queue='image_editing'
+)
+def mineru_task(
+    self,
+    task_id: str,
+    slide_id: str,
+    cos_key: str,
+    user_id: str = None,
+    enable_formula: bool = True,
+    enable_table: bool = True,
+    enable_style_recognition: bool = True,
+    remove_text: bool = False
+) -> Dict[str, Any]:
+    """
+    MinerU识别的 Celery 任务
+
+    使用MinerU进行高精度文字识别，可选择是否去除文字
+
+    Args:
+        task_id: 任务ID
+        slide_id: 幻灯片ID
+        cos_key: 图片COS Key
+        user_id: 用户ID（可选）
+        enable_formula: 是否识别公式
+        enable_table: 是否识别表格
+        enable_style_recognition: 是否启用样式识别
+        remove_text: 是否去除文字
+
+    Returns:
+        识别结果字典
+    """
+    logger.info("开始MinerU识别任务", extra={
+        "task_id": task_id,
+        "slide_id": slide_id,
+        "cos_key": cos_key,
+        "enable_formula": enable_formula,
+        "enable_table": enable_table,
+        "enable_style_recognition": enable_style_recognition,
+        "remove_text": remove_text,
+        "celery_task_id": self.request.id
+    })
+
+    try:
+        return _execute_mineru_recognition(
+            task_id=task_id,
+            slide_id=slide_id,
+            cos_key=cos_key,
+            user_id=user_id,
+            enable_formula=enable_formula,
+            enable_table=enable_table,
+            enable_style_recognition=enable_style_recognition,
+            remove_text=remove_text
+        )
+    except Exception as exc:
+        return _handle_editing_error(
+            self=self,
+            task_id=task_id,
+            slide_id=slide_id,
+            error=exc
+        )
+
+
+def _execute_mineru_recognition(
+    task_id: str,
+    slide_id: str,
+    cos_key: str,
+    user_id: str = None,
+    enable_formula: bool = True,
+    enable_table: bool = True,
+    enable_style_recognition: bool = True,
+    remove_text: bool = False
+) -> Dict[str, Any]:
+    """
+    执行MinerU识别的核心逻辑
+
+    1. MinerU识别（获取精确坐标）
+    2. 可选：文字去除
+    """
+    from app.db.database import AsyncSessionLocal
+    from app.services.editing.image_editing_service import ImageEditingService
+
+    with AsyncRunner() as runner:
+        async def do_recognition():
+            # 使用数据库会话执行识别
+            async with AsyncSessionLocal() as db:
+                service = ImageEditingService(db)
+
+                # 步骤1: 执行MinerU识别
+                logger.info("步骤1: 开始MinerU识别", extra={"task_id": task_id})
+                ocr_result = await service.parse_with_mineru(
+                    slide_id=slide_id,
+                    cos_key=cos_key,
+                    user_id=user_id,
+                    task_id=task_id,
+                    enable_formula=enable_formula,
+                    enable_table=enable_table,
+                    enable_style_recognition=enable_style_recognition
+                )
+
+                result = {
+                    "ocr_result": ocr_result,
+                }
+
+                # 步骤2: 可选的文字去除
+                if remove_text:
+                    logger.info("步骤2: 开始文字去除", extra={"task_id": task_id})
+                    removal_result = await service.remove_text_from_image(
+                        slide_id=slide_id,
+                        cos_key=cos_key,
+                        user_id=user_id,
+                        task_id=task_id,
+                        ocr_result=ocr_result
+                    )
+                    result["removal_result"] = removal_result
+
+                return result
+
+        result = runner.run(do_recognition())
+
+        logger.info("MinerU识别完成", extra={
+            "task_id": task_id,
+            "slide_id": slide_id,
+            "text_count": len(result.get("ocr_result", {}).text_regions) if result.get("ocr_result") else 0,
+            "edited_cos_key": result.get("removal_result", {}).get("edited_cos_key")
+        })
+
+        return {
+            "task_id": task_id,
+            "slide_id": slide_id,
+            "cos_key": cos_key,
+            "status": "completed",
+            "progress": 100 if remove_text else 50,
+            "text_count": len(result.get("ocr_result", {}).text_regions) if result.get("ocr_result") else 0,
+            "edited_cos_key": result.get("removal_result", {}).get("edited_cos_key")
+        }

@@ -42,10 +42,33 @@ class TraditionalOCRRegion(BaseModel):
 
 class TraditionalOCRResult(BaseModel):
     """传统OCR识别结果"""
-    engine: str = Field(..., description="OCR引擎名称：baidu_ocr, tencent_ocr等")
+    engine: str = Field(..., description="OCR引擎名称：baidu_ocr, tencent_ocr, mineru等")
     regions: List[TraditionalOCRRegion] = Field(default_factory=list, description="识别的文字区域列表")
     parse_time_ms: int = Field(..., description="解析耗时（毫秒）")
     text_count: int = Field(..., description="识别的文字数量")
+
+
+# ============================================================================
+# 装饰元素（图片区域）
+# ============================================================================
+
+class ImageRegion(BaseModel):
+    """装饰元素/图片区域"""
+    id: str = Field(..., description="区域唯一标识")
+    type: str = Field(default="decoration", description="类型：decoration, icon, chart等")
+    bbox: BoundingBox = Field(..., description="边界框坐标")
+    cos_key: Optional[str] = Field(None, description="COS存储key（如果已上传）")
+    img_path: Optional[str] = Field(None, description="MinerU原始图片路径")
+    confidence: float = Field(default=0.9, ge=0, le=1, description="识别置信度 0-1")
+    caption: Optional[str] = Field(None, description="图片描述")
+    footnote: Optional[str] = Field(None, description="图片脚注")
+
+
+class ImageRegionList(BaseModel):
+    """装饰元素区域列表"""
+    regions: List[ImageRegion] = Field(default_factory=list, description="装饰元素区域列表")
+    count: int = Field(default=0, description="装饰元素数量")
+    source: str = Field(default="mineru", description="来源：mineru, manual等")
 
 
 # ============================================================================
@@ -145,12 +168,24 @@ class ParseAndRemoveRequest(BaseModel):
     slide_id: str = Field(..., description="幻灯片ID")
     cos_key: str = Field(..., description="图片COS Key")
     ai_model_id: Optional[str] = Field(None, description="AI模型ID（用于文字去除，不提供则使用默认模型）")
+    ocr_engine: Optional[str] = Field(None, description="OCR引擎：mineru, hybrid_ocr, tencent_ocr, baidu_ocr")
 
 
 class HybridOCRParseRequest(BaseModel):
     """仅混合OCR识别请求"""
     slide_id: str = Field(..., description="幻灯片ID")
     cos_key: str = Field(..., description="图片COS Key")
+    ocr_engine: Optional[str] = Field("mineru", description="OCR引擎：mineru, hybrid_ocr等")
+
+
+class MinerUParseRequest(BaseModel):
+    """MinerU识别请求"""
+    slide_id: str = Field(..., description="幻灯片ID")
+    cos_key: str = Field(..., description="图片COS Key")
+    enable_formula: bool = Field(default=True, description="是否识别公式")
+    enable_table: bool = Field(default=True, description="是否识别表格")
+    enable_style_recognition: bool = Field(default=True, description="是否启用样式识别（多模态）")
+    remove_text: bool = Field(default=False, description="是否去除文字")
 
 
 class RemoveTextRequest(BaseModel):

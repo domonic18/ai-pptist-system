@@ -15,6 +15,7 @@ from app.db.database import get_db
 from app.schemas.image_editing import (
     ParseAndRemoveRequest,
     HybridOCRParseRequest,
+    MinerUParseRequest,
     RemoveTextRequest,
     EditingTaskResponse,
     EditingStatusResponse,
@@ -33,6 +34,113 @@ def get_current_user_id():
 
 
 router = APIRouter(tags=["image_editing"])
+
+
+@router.post("/parse_with_mineru", response_model=Dict[str, Any])
+async def parse_with_mineru(
+    request: MinerUParseRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    使用MinerU识别图片中的文字
+
+    结合MinerU（精确坐标）和多模态大模型（样式信息）
+
+    Args:
+        request: 包含slide_id、cos_key和选项的请求
+        user_id: 当前用户ID
+
+    Returns:
+        Dict: 包含task_id、status、estimated_time的任务信息
+    """
+    try:
+        logger.info(
+            "收到MinerU识别请求",
+            extra={
+                "slide_id": request.slide_id,
+                "cos_key": request.cos_key,
+                "enable_formula": request.enable_formula,
+                "enable_table": request.enable_table,
+                "enable_style_recognition": request.enable_style_recognition
+            }
+        )
+
+        repo = ImageEditingRepository(db)
+
+        # 生成任务ID
+        task_id = f"edit_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+
+        # 创建任务记录
+        await repo.create_task(
+            task_id=task_id,
+            slide_id=request.slide_id,
+            original_cos_key=request.cos_key,
+            user_id=user_id
+        )
+
+        # 提交到Celery队列
+        from app.services.tasks.image_editing_tasks import mineru_task
+        celery_task = mineru_task.apply_async(
+            kwargs={
+                "task_id": task_id,
+                "slide_id": request.slide_id,
+                "cos_key": request.cos_key,
+                "user_id": user_id,
+                "enable_formula": request.enable_formula,
+                "enable_table": request.enable_table,
+                "enable_style_recognition": request.enable_style_recognition,
+                "remove_text": request.remove_text
+            },
+            queue="image_editing"
+        )
+
+        logger.info(
+            "MinerU任务已提交到Celery队列",
+            extra={
+                "task_id": task_id,
+                "celery_task_id": celery_task.id,
+                "slide_id": request.slide_id
+            }
+        )
+
+        # 估算时间：MinerU识别约10秒，文字去除约15秒
+        estimated_time = 10
+        if request.remove_text:
+            estimated_time += 15
+
+        return {
+            "success": True,
+            "data": {
+                "task_id": task_id,
+                "status": "pending",
+                "estimated_time": estimated_time,
+                "message": "MinerU识别任务已创建，正在处理中"
+            },
+            "error": None,
+            "timestamp": datetime.utcnow().isoformat(),
+            "request_id": str(uuid.uuid4())
+        }
+
+    except Exception as e:
+        logger.error(
+            "MinerU任务创建失败",
+            extra={
+                "slide_id": request.slide_id,
+                "error": str(e)
+            }
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "data": None,
+                "error": {"message": str(e), "code": "TASK_CREATE_FAILED"},
+                "timestamp": datetime.utcnow().isoformat(),
+                "request_id": str(uuid.uuid4())
+            }
+        )
 
 
 @router.post("/parse_hybrid_ocr", response_model=Dict[str, Any])
@@ -233,22 +341,27 @@ async def parse_and_remove_text(
     """
     一步完成：OCR识别 + 文字去除
 
-    同时执行混合OCR识别和文字去除，返回完整结果
+    同时执行OCR识别和文字去除，返回完整结果
+    支持选择OCR引擎：mineru | hybrid_ocr
 
     Args:
-        request: 包含slide_id、cos_key和ai_model_id的请求
+        request: 包含slide_id、cos_key、ai_model_id和ocr_engine的请求
         user_id: 当前用户ID
 
     Returns:
         Dict: 包含task_id、status、estimated_time的任务信息
     """
     try:
+        # 获取OCR引擎，默认使用配置的默认引擎
+        ocr_engine = request.ocr_engine or "hybrid_ocr"
+
         logger.info(
             "收到图片编辑请求（一步完成）",
             extra={
                 "slide_id": request.slide_id,
                 "cos_key": request.cos_key,
-                "ai_model_id": request.ai_model_id
+                "ai_model_id": request.ai_model_id,
+                "ocr_engine": ocr_engine
             }
         )
 
@@ -265,18 +378,40 @@ async def parse_and_remove_text(
             user_id=user_id
         )
 
-        # 提交到Celery队列（完整编辑任务）
-        from app.services.tasks.image_editing_tasks import full_editing_task
-        celery_task = full_editing_task.apply_async(
-            kwargs={
-                "task_id": task_id,
-                "slide_id": request.slide_id,
-                "cos_key": request.cos_key,
-                "user_id": user_id,
-                "ai_model_id": request.ai_model_id
-            },
-            queue="image_editing"
-        )
+        # 根据OCR引擎选择提交不同的任务
+        if ocr_engine == "mineru":
+            # 使用MinerU任务
+            from app.services.tasks.image_editing_tasks import mineru_task
+            celery_task = mineru_task.apply_async(
+                kwargs={
+                    "task_id": task_id,
+                    "slide_id": request.slide_id,
+                    "cos_key": request.cos_key,
+                    "user_id": user_id,
+                    "enable_formula": True,
+                    "enable_table": True,
+                    "enable_style_recognition": True,
+                    "remove_text": True
+                },
+                queue="image_editing"
+            )
+            estimated_time = 25
+            message = "MinerU识别+文字去除任务已创建，正在处理中"
+        else:
+            # 使用混合OCR任务（默认）
+            from app.services.tasks.image_editing_tasks import full_editing_task
+            celery_task = full_editing_task.apply_async(
+                kwargs={
+                    "task_id": task_id,
+                    "slide_id": request.slide_id,
+                    "cos_key": request.cos_key,
+                    "user_id": user_id,
+                    "ai_model_id": request.ai_model_id
+                },
+                queue="image_editing"
+            )
+            estimated_time = 20
+            message = "编辑任务已创建，正在处理中"
 
         logger.info(
             "图片编辑任务已提交到Celery队列",
@@ -284,6 +419,7 @@ async def parse_and_remove_text(
                 "task_id": task_id,
                 "celery_task_id": celery_task.id,
                 "slide_id": request.slide_id,
+                "ocr_engine": ocr_engine,
                 "ai_model_id": request.ai_model_id
             }
         )
@@ -293,8 +429,8 @@ async def parse_and_remove_text(
             "data": {
                 "task_id": task_id,
                 "status": "pending",
-                "estimated_time": 20,
-                "message": "编辑任务已创建，正在处理中"
+                "estimated_time": estimated_time,
+                "message": message
             },
             "error": None,
             "timestamp": datetime.utcnow().isoformat(),
