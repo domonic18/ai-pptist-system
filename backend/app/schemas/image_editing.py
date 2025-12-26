@@ -131,6 +131,7 @@ class HybridOCRResult(BaseModel):
     slide_id: str = Field(..., description="幻灯片ID")
     original_cos_key: str = Field(..., description="原始图片COS Key")
     text_regions: List[HybridTextRegion] = Field(default_factory=list, description="融合后的文字区域列表")
+    image_regions: Optional[List[ImageRegion]] = Field(None, description="装饰元素/图片区域列表（来自MinerU）")
     metadata: HybridOCRMetadata = Field(..., description="元数据")
 
 

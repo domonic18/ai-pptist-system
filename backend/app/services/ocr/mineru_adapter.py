@@ -686,7 +686,12 @@ class MinerUAdapter:
             elif item_type == "image":
                 # 图片/装饰元素
                 img_path = item.get("img_path", "")
+                
+                # 生成唯一ID
+                region_id = f"decoration_{uuid.uuid4().hex[:8]}"
+                
                 image_region = {
+                    "id": region_id,
                     "bbox": bbox_dict,
                     "type": "decoration"
                 }

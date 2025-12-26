@@ -132,11 +132,28 @@ class MinerUMultimodalFusionService:
                 image_height=image_height
             )
 
+            # 从MinerU结果中获取装饰元素
+            image_regions_data = mineru_result.get("image_regions", [])
+            
+            # 转换为ImageRegion对象列表
+            from app.schemas.image_editing import ImageRegion, BoundingBox
+            image_regions = []
+            for img_region in image_regions_data:
+                image_regions.append(ImageRegion(
+                    id=img_region.get("id", f"img_{len(image_regions)}"),
+                    type=img_region.get("type", "decoration"),
+                    bbox=BoundingBox(**img_region.get("bbox", {"x": 0, "y": 0, "width": 0, "height": 0})),
+                    cos_key=img_region.get("cos_key"),
+                    img_path=img_region.get("img_path"),
+                    confidence=img_region.get("confidence", 0.9)
+                ))
+
             result = HybridOCRResult(
                 task_id=task_id,
                 slide_id=slide_id,
                 original_cos_key=cos_key,
                 text_regions=fused_regions,
+                image_regions=image_regions if image_regions else None,
                 metadata=metadata
             )
 
