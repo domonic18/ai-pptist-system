@@ -144,6 +144,43 @@ class Settings(BaseSettings):
     image_default_quality: str = "standard"
     image_supported_qualities: list = ["standard", "hd"]
 
+    # ==================== MinerU配置 ====================
+    # 注意：API版本是v4
+    MINERU_TOKEN: str = ""
+    MINERU_API_URL: str = "https://mineru.net/api/v4/extract/task"
+    MINERU_MODEL_VERSION: str = "vlm"  # vlm 或 pipeline
+
+    # ==================== OCR引擎配置 ====================
+    # 默认OCR引擎: mineru | hybrid_ocr | tencent_ocr | baidu_ocr
+    DEFAULT_OCR_ENGINE: str = "mineru"
+
+    # ------------------- OCR超时配置（单位：秒）-------------------
+    # 百度OCR超时配置
+    BAIDU_OCR_TIMEOUT_GLOBAL: Optional[int] = None  # 全局超时（None表示不限制）
+    BAIDU_OCR_TIMEOUT_CONNECT: int = 10  # 连接超时
+    BAIDU_OCR_TIMEOUT_READ: int = 90  # 读取超时
+
+    # 腾讯OCR超时配置
+    TENCENT_OCR_TIMEOUT: int = 60  # 请求超时
+
+    # MinerU超时配置
+    MINERU_TIMEOUT: int = 600  # 总超时时间（秒，用于轮询）
+    MINERU_TIMEOUT_SUBMIT: int = 30  # 提交任务超时
+    MINERU_TIMEOUT_POLL: int = 10  # 轮询状态超时
+    MINERU_TIMEOUT_DOWNLOAD: int = 60  # 下载结果超时
+    MINERU_TIMEOUT_IMAGE_SIZE: int = 30  # 获取图片尺寸超时
+    MINERU_MAX_RETRIES: int = 3  # 最大重试次数
+
+    # 多模态OCR超时配置
+    MULTIMODAL_OCR_TIMEOUT: int = 120  # 多模态模型请求超时
+
+    # 文字去除配置
+    ENABLE_TEXT_REMOVAL: bool = True
+    TEXT_REMOVAL_MODEL: str = "dall-e-3"
+
+    # 坐标转换配置
+    DEFAULT_OBJECT_FIT: str = "cover"  # cover | contain
+
     # ==================== 重试配置 ====================
     cos_retry_delay_base: int = 1
     cos_max_retries: int = 3

@@ -255,14 +255,27 @@ class TencentCosAdapter(BaseStorage):
             raise URLError("不支持的操作类型: {}".format(operation))
 
         try:
+            # 生成预签名URL
+            # Params参数可以包含额外的查询参数，这些参数也会被签名
+            # 注意：不要在Params中包含response-*参数，以免影响外部访问
             url = await self._run_in_executor(
                 self._client.get_presigned_url,
                 Method=method,
                 Bucket=self.config.bucket,
                 Key=key,
-                Expired=expires
+                Expired=expires,
+                Params={}  # 空的Params，避免限制访问
             )
-            logger.info("成功生成COS预签名URL", extra={'key': key[:50]})
+            
+            logger.info(
+                "成功生成COS预签名URL",
+                extra={
+                    'key': key[:50],
+                    'expires': expires,
+                    'method': method,
+                    'url_length': len(url)
+                }
+            )
             return url
 
         except Exception as e:
