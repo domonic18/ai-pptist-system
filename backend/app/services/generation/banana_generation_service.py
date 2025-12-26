@@ -5,6 +5,7 @@ Banana生成服务（Facade层）
 
 import uuid
 import json
+from pathlib import Path
 from typing import Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +26,7 @@ from app.prompts import PromptHelper
 from app.core.ai.factory import AIProviderFactory
 from app.core.ai.models import ModelCapability
 from app.repositories.ai_model import AIModelRepository
+from app.core.config.config import settings
 
 logger = get_logger(__name__)
 
@@ -53,16 +55,33 @@ class BananaGenerationService:
     ) -> Dict[str, Any]:
         """
         将大纲内容拆分为结构化的PPT页面数据
-        
+
         Args:
             content: 原始Markdown大纲内容
             ai_model_id: AI模型ID
-            
+
         Returns:
             Dict: 结构化的幻灯片数据 {title, slides: [{title, points}]}
         """
         logger.info("开始拆分大纲", extra={"ai_model_id": ai_model_id, "content_len": len(content)})
-        
+
+        # ==================== Mock模式 ====================
+        if settings.enable_banana_outline_split_mock:
+            logger.info("使用Mock模式进行大纲拆分")
+            mock_file_path = Path(settings.absolute_mockdata_dir) / "banana_outline_split_example.json"
+            try:
+                with open(mock_file_path, "r", encoding="utf-8") as f:
+                    result = json.load(f)
+                logger.info("Mock数据读取成功", extra={"slides_count": len(result.get("slides", []))})
+                return result
+            except FileNotFoundError:
+                logger.error(f"Mock文件未找到: {mock_file_path}")
+                raise ValueError(f"Mock文件未找到: {mock_file_path}，请检查文件是否存在")
+            except json.JSONDecodeError as e:
+                logger.error(f"Mock文件JSON解析失败: {e}")
+                raise ValueError(f"Mock文件格式错误: {e}")
+
+        # ==================== 正常模式 ====================
         # 1. 获取模型配置
         ai_model_repo = AIModelRepository(self.db)
         ai_model = await ai_model_repo.get_model_by_id(ai_model_id)
@@ -144,20 +163,22 @@ class BananaGenerationService:
     async def generate_batch_slides(
         self,
         outline: Dict[str, Any],
-        template_id: str,
+        template_id: Optional[str],
         generation_model: str,
         canvas_size: Dict[str, float],
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        custom_template_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         批量生成幻灯片图片
 
         Args:
             outline: PPT大纲数据
-            template_id: 模板ID
+            template_id: 模板ID（与custom_template_url二选一）
             generation_model: 生成模型名称
             canvas_size: 画布尺寸
             user_id: 用户ID（可选）
+            custom_template_url: 自定义模板图片URL（与template_id二选一）
 
         Returns:
             Dict: 包含task_id等信息
@@ -172,22 +193,32 @@ class BananaGenerationService:
         if total_slides == 0:
             raise ValueError("大纲中没有幻灯片数据")
 
-        # 从数据库获取模板信息（模板图片存储在 COS）
-        template = await self.repo.get_template(template_id)
-        if not template:
-            raise ValueError(
-                f"模板未找到: {template_id}。"
-                f"请先运行初始化脚本将模板上传到 COS: "
-                f"python -m scripts.init_banana_templates"
-            )
-        
-        # 使用 COS 中的模板图片 URL
-        template_image_url = template.full_image_url
+        # 获取模板图片URL：优先使用自定义URL，否则从数据库获取
+        template_image_url = None
 
-        logger.info("获取模板信息", extra={
-            "template_id": template_id,
-            "template_image_url": template_image_url
-        })
+        if custom_template_url:
+            # 使用用户上传的自定义模板URL
+            template_image_url = custom_template_url
+            logger.info("使用自定义模板URL", extra={
+                "custom_template_url": custom_template_url[:100]
+            })
+        elif template_id:
+            # 从数据库获取模板信息（模板图片存储在 COS）
+            template = await self.repo.get_template(template_id)
+            if not template:
+                raise ValueError(
+                    f"模板未找到: {template_id}。"
+                    f"请先运行初始化脚本将模板上传到 COS: "
+                    f"python -m scripts.init_banana_templates"
+                )
+            # 使用 COS 中的模板图片 URL
+            template_image_url = template.full_image_url
+            logger.info("获取模板信息", extra={
+                "template_id": template_id,
+                "template_image_url": template_image_url
+            })
+        else:
+            raise ValueError("template_id和custom_template_url必须提供其中一个")
 
         task = await self.repo.create_task(
             task_id=task_id,
@@ -200,8 +231,9 @@ class BananaGenerationService:
             user_id=user_id
         )
 
-        # 增加模板使用次数
-        await self.repo.increment_template_usage(template_id)
+        # 增加模板使用次数（仅对系统模板）
+        if template_id:
+            await self.repo.increment_template_usage(template_id)
 
         # 格式化幻灯片数据
         formatted_slides = []

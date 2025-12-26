@@ -50,7 +50,8 @@ class CanvasSize(BaseModel):
 class GenerateBatchSlidesRequest(BaseModel):
     """批量生成PPT请求"""
     outline: OutlineData = Field(..., description="PPT大纲数据")
-    template_id: str = Field(..., description="模板ID")
+    template_id: Optional[str] = Field(None, description="模板ID（与custom_template_url二选一）")
+    custom_template_url: Optional[str] = Field(None, description="自定义模板图片URL（与template_id二选一）")
     generation_model: str = Field(default="gemini-3-pro-image-preview", description="生成模型名称")
     canvas_size: CanvasSize = Field(default_factory=CanvasSize, description="画布尺寸")
 
@@ -173,8 +174,22 @@ async def generate_batch_slides(
         Dict: 包含task_id、total_slides、status的任务信息
     """
     try:
+        # 验证template_id和custom_template_url至少有一个
+        if not request.template_id and not request.custom_template_url:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "success": False,
+                    "data": None,
+                    "error": {"message": "template_id和custom_template_url必须提供其中一个", "code": "MISSING_TEMPLATE"},
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "request_id": str(uuid.uuid4())
+                }
+            )
+
         logger.info("收到批量生成PPT请求", extra={
             "template_id": request.template_id,
+            "custom_template_url": request.custom_template_url[:100] if request.custom_template_url else None,
             "total_slides": len(request.outline.slides),
             "generation_model": request.generation_model
         })
@@ -184,6 +199,7 @@ async def generate_batch_slides(
         result = await service.generate_batch_slides(
             outline=request.outline.dict(),
             template_id=request.template_id,
+            custom_template_url=request.custom_template_url,
             generation_model=request.generation_model,
             canvas_size=request.canvas_size.dict(),
             user_id=user_id

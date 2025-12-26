@@ -36,7 +36,7 @@ class BananaGenerationTask(Base):
 
     # 任务配置
     outline = Column(JSONB, nullable=False)  # 大纲数据
-    template_id = Column(String(50), nullable=False)  # 模板ID
+    template_id = Column(String(50), nullable=True)  # 模板ID（自定义模板时为NULL）
     template_image_url = Column(Text, nullable=True)  # 模板图片URL（COS或本地）
     generation_model = Column(String(100), nullable=False)  # 生成模型名称
     canvas_size = Column(JSONB, nullable=False)  # 画布尺寸
