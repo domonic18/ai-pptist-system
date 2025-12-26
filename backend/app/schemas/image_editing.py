@@ -120,6 +120,9 @@ class HybridOCRMetadata(BaseModel):
     merged_count: int = Field(..., description="融合后数量")
     created_at: datetime = Field(..., description="创建时间")
     completed_at: datetime = Field(..., description="完成时间")
+    # 新增：图片尺寸信息（用于前端坐标转换）
+    image_width: Optional[int] = Field(None, description="原始图片宽度（像素）")
+    image_height: Optional[int] = Field(None, description="原始图片高度（像素）")
 
 
 class HybridOCRResult(BaseModel):

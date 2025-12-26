@@ -109,6 +109,11 @@ class MinerUMultimodalFusionService:
             # 步骤3: 构建元数据
             total_time = int((datetime.now() - start_time).total_seconds() * 1000)
 
+            # 从MinerU结果中获取图片尺寸
+            mineru_metadata = mineru_result.get("metadata", {})
+            image_width = mineru_metadata.get("image_width", 1920)
+            image_height = mineru_metadata.get("image_height", 1080)
+
             metadata = HybridOCRMetadata(
                 traditional_ocr_engine="mineru",
                 multimodal_model=multimodal_result.get("model", "gpt-4o") if multimodal_result else "none",
@@ -121,7 +126,10 @@ class MinerUMultimodalFusionService:
                 multimodal_count=len(multimodal_result.get("regions", [])) if multimodal_result else 0,
                 merged_count=len(fused_regions),
                 created_at=start_time,
-                completed_at=datetime.now()
+                completed_at=datetime.now(),
+                # 新增：图片尺寸信息（用于前端坐标转换）
+                image_width=image_width,
+                image_height=image_height
             )
 
             result = HybridOCRResult(
