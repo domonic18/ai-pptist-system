@@ -101,6 +101,7 @@ class Settings(BaseSettings):
     # ==================== Mock配置 ====================
     enable_outline_mock: bool = False
     enable_slides_mock: bool = False
+    enable_banana_outline_split_mock: bool = False
 
     # ==================== 日志配置 ====================
     log_level: str = "INFO"
@@ -149,6 +150,7 @@ class Settings(BaseSettings):
     MINERU_TOKEN: str = ""
     MINERU_API_URL: str = "https://mineru.net/api/v4/extract/task"
     MINERU_MODEL_VERSION: str = "vlm"  # vlm 或 pipeline
+    MINERU_USE_PUBLIC_URL: bool = False  # 是否使用公开URL（True=公开URL适合COS公有读，False=预签名URL适合COS私有读）
 
     # ==================== OCR引擎配置 ====================
     # 默认OCR引擎: mineru | hybrid_ocr | tencent_ocr | baidu_ocr
