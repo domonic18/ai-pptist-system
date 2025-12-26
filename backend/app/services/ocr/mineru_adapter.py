@@ -656,15 +656,23 @@ class MinerUAdapter:
             item_type = item.get("type")
             bbox = item.get("bbox", [0, 0, 0, 0])
 
-            # 转换bbox格式 [x0, y0, x1, y1] -> {x, y, width, height}
+            # 转换bbox格式：
+            # 1. MinerU返回的是归一化坐标 [x0, y0, x1, y1] (0-1000范围)
+            # 2. 需要转换为像素坐标 {x, y, width, height}
             if len(bbox) == 4:
-                x0, y0, x1, y1 = bbox
-                bbox_dict = {
-                    "x": x0,
-                    "y": y0,
-                    "width": x1 - x0,
-                    "height": y1 - y0
-                }
+                # 使用 convert_bbox_from_normalized 正确转换
+                bbox_dict = convert_bbox_from_normalized(bbox, image_width, image_height)
+                # 调试日志：记录坐标转换
+                if item_type in ["text", "title"] and len(text_regions) < 3:  # 只记录前3个文字区域
+                    logger.debug(
+                        "MinerU bbox转换",
+                        extra={
+                            "normalized_bbox": bbox,
+                            "pixel_bbox": bbox_dict,
+                            "image_size": {"width": image_width, "height": image_height},
+                            "text": item.get("text", "")[:20]
+                        }
+                    )
             else:
                 bbox_dict = {"x": 0, "y": 0, "width": 0, "height": 0}
 
