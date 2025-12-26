@@ -11,6 +11,7 @@ import httpx
 
 from app.core.log_utils import get_logger
 from app.core.storage import get_storage_service, download_image_by_key
+from app.core.config.config import settings
 
 logger = get_logger(__name__)
 
@@ -221,31 +222,84 @@ class BaiduOCREngine:
         )
 
         try:
-            # 使用 trust_env=False 避开可能的代理干扰
-            async with httpx.AsyncClient(timeout=30.0, trust_env=False) as client:
+            # 从配置读取超时设置：大图片处理可能需要更长时间
+            timeout = httpx.Timeout(
+                settings.BAIDU_OCR_TIMEOUT_GLOBAL,
+                connect=settings.BAIDU_OCR_TIMEOUT_CONNECT,
+                read=settings.BAIDU_OCR_TIMEOUT_READ
+            )
+
+            logger.info(
+                "百度云OCR请求参数",
+                extra={
+                    "url": BAIDU_OCR_API_URL,
+                    "timeout_connect": f"{settings.BAIDU_OCR_TIMEOUT_CONNECT}s",
+                    "timeout_read": f"{settings.BAIDU_OCR_TIMEOUT_READ}s",
+                    "timeout_global": str(settings.BAIDU_OCR_TIMEOUT_GLOBAL),
+                    "base64_length": len(img_base64),
+                    "payload_size": len(urlencode(payload))
+                }
+            )
+
+            async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
                 # 显式进行 urlencode 并编码为 bytes，模拟 requests 的行为
                 encoded_body = urlencode(payload).encode("utf-8")
-                
+
+                logger.info("开始调用百度云OCR API", extra={"base64_length": len(img_base64)})
+
                 response = await client.post(
                     url,
                     headers=headers,
                     content=encoded_body
                 )
-                
-                # 记录详细的响应信息
-                logger.debug(
-                    "百度云OCR API响应结果",
+
+                logger.info(
+                    "百度云OCR API响应成功",
                     extra={
                         "status_code": response.status_code,
-                        "response_body": response.text[:1000] # 记录更多内容
+                        "response_preview": response.text[:500] if response.text else ""
                     }
                 )
-                
+
                 response.raise_for_status()
                 result = response.json()
+        except httpx.TimeoutException as e:
+            logger.error(
+                f"百度云OCR请求超时",
+                extra={
+                    "exception_type": type(e).__name__,
+                    "exception_message": str(e),
+                    "timeout_config": f"connect={settings.BAIDU_OCR_TIMEOUT_CONNECT}s, read={settings.BAIDU_OCR_TIMEOUT_READ}s"
+                }
+            )
+            raise Exception(f"百度云OCR请求超时（图片可能过大），请稍后重试")
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"百度云OCR HTTP状态错误",
+                extra={
+                    "status_code": e.response.status_code,
+                    "response_body": e.response.text[:500] if e.response.text else ""
+                }
+            )
+            raise Exception(f"百度云OCR返回错误状态码: {e.response.status_code}")
         except httpx.HTTPError as e:
-            logger.error(f"HTTP请求异常: {str(e)}")
-            raise Exception(f"请求百度云OCR接口失败: {str(e)}")
+            logger.error(
+                f"百度云OCR HTTP请求异常",
+                extra={
+                    "exception_type": type(e).__name__,
+                    "exception_message": str(e) if str(e) else "空错误消息"
+                }
+            )
+            raise Exception(f"请求百度云OCR接口失败: {type(e).__name__}")
+        except Exception as e:
+            logger.error(
+                f"百度云OCR未知异常",
+                extra={
+                    "exception_type": type(e).__name__,
+                    "exception_message": str(e)
+                }
+            )
+            raise
 
         # 检查错误
         if "error_code" in result:

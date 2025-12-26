@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.log_utils import get_logger
 from app.core.storage import get_storage_service, download_image_by_key
 from app.services.ai_model.management_service import ManagementService
+from app.core.config.config import settings
 from app.core.ai.factory import AIProviderFactory
 from app.core.ai.models import ModelCapability
 
@@ -294,15 +295,17 @@ class MultimodalOCREngine:
             "调用多模态模型API",
             extra={
                 "model": self._model_config["ai_model_name"] if self._model_config else "unknown",
-                "image_size": f"{image_width}x{image_height}"
+                "image_size": f"{image_width}x{image_height}",
+                "timeout": settings.MULTIMODAL_OCR_TIMEOUT
             }
         )
 
-        # 调用API
+        # 调用API（使用配置的超时时间）
         response = await provider.vision_chat(
             messages=messages,
             temperature=0.1,  # 使用低温度以获得更稳定的结果
-            max_tokens=4096
+            max_tokens=4096,
+            timeout=settings.MULTIMODAL_OCR_TIMEOUT  # 超时时间（秒）
         )
 
         # 如果返回的是dict（包含content字段），提取内容

@@ -14,6 +14,7 @@ from tencentcloud.ocr.v20181119 import ocr_client, models as ocr_models
 
 from app.core.log_utils import get_logger
 from app.core.storage import download_image_by_key, get_storage_service
+from app.core.config.config import settings
 
 logger = get_logger(__name__)
 
@@ -54,6 +55,7 @@ class TencentOCRSDKEngine:
         # 配置HTTP选项
         httpProfile = HttpProfile()
         httpProfile.endpoint = "ocr.tencentcloudapi.com"
+        httpProfile.reqTimeout = settings.TENCENT_OCR_TIMEOUT  # 设置请求超时时间（秒）
 
         # 配置客户端选项
         clientProfile = ClientProfile()
