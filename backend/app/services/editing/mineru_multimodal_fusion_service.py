@@ -40,7 +40,7 @@ class MinerUMultimodalFusionService:
             db: 数据库会话
         """
         self.db = db
-        self.mineru_adapter = MinerUAdapter()
+        self.mineru_adapter = MinerUAdapter(db=db)
         self.multimodal_engine = MultimodalOCREngine(db=db)
 
     async def recognize_image(
@@ -48,6 +48,7 @@ class MinerUMultimodalFusionService:
         cos_key: str,
         task_id: str,
         slide_id: str,
+        user_id: Optional[str] = None,
         enable_formula: bool = True,
         enable_table: bool = True,
         enable_style_recognition: bool = True
@@ -59,6 +60,7 @@ class MinerUMultimodalFusionService:
             cos_key: 图片COS Key
             task_id: 任务ID
             slide_id: 幻灯片ID
+            user_id: 用户ID（可选，用于将装饰图添加到图片管理）
             enable_formula: 是否识别公式
             enable_table: 是否识别表格
             enable_style_recognition: 是否启用样式识别（多模态）
@@ -74,6 +76,7 @@ class MinerUMultimodalFusionService:
                 "task_id": task_id,
                 "slide_id": slide_id,
                 "cos_key": cos_key,
+                "user_id": user_id,
                 "enable_style_recognition": enable_style_recognition
             }
         )
@@ -82,6 +85,7 @@ class MinerUMultimodalFusionService:
             # 步骤1: 并行执行MinerU和多模态识别
             mineru_task = self._recognize_with_mineru(
                 cos_key,
+                user_id,
                 enable_formula,
                 enable_table
             )
@@ -179,6 +183,7 @@ class MinerUMultimodalFusionService:
     async def _recognize_with_mineru(
         self,
         cos_key: str,
+        user_id: Optional[str],
         enable_formula: bool,
         enable_table: bool
     ) -> Dict[str, Any]:
@@ -187,6 +192,7 @@ class MinerUMultimodalFusionService:
 
         Args:
             cos_key: 图片COS Key
+            user_id: 用户ID（可选，用于将装饰图添加到图片管理）
             enable_formula: 是否识别公式
             enable_table: 是否识别表格
 
@@ -195,6 +201,7 @@ class MinerUMultimodalFusionService:
         """
         result = await self.mineru_adapter.recognize_from_cos_key(
             cos_key=cos_key,
+            user_id=user_id,
             enable_ocr=True,
             enable_formula=enable_formula,
             enable_table=enable_table

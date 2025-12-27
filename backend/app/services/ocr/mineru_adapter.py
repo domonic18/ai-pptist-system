@@ -12,6 +12,7 @@ import httpx
 import uuid
 import mimetypes
 from PIL import Image
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config.config import settings
 from app.core.log_utils import get_logger
@@ -31,8 +32,14 @@ class MinerUAdapter:
     4. 格式化为标准格式
     """
 
-    def __init__(self):
-        """初始化MinerU适配器"""
+    def __init__(self, db: Optional[AsyncSession] = None):
+        """
+        初始化MinerU适配器
+        
+        Args:
+            db: 数据库会话（可选，用于将装饰图添加到图片管理）
+        """
+        self.db = db
         self.api_url = settings.MINERU_API_URL
         self.token = settings.MINERU_TOKEN
         self.model_version = settings.MINERU_MODEL_VERSION
@@ -47,6 +54,7 @@ class MinerUAdapter:
     async def recognize_from_cos_key(
         self,
         cos_key: str,
+        user_id: Optional[str] = None,
         enable_ocr: bool = True,
         enable_formula: bool = True,
         enable_table: bool = True
@@ -56,6 +64,7 @@ class MinerUAdapter:
 
         Args:
             cos_key: 图片COS Key
+            user_id: 用户ID（可选，用于将装饰图添加到图片管理）
             enable_ocr: 是否开启OCR
             enable_formula: 是否识别公式
             enable_table: 是否识别表格
@@ -73,6 +82,7 @@ class MinerUAdapter:
                 "开始MinerU识别",
                 extra={
                     "cos_key": cos_key,
+                    "user_id": user_id,
                     "enable_ocr": enable_ocr,
                     "enable_formula": enable_formula,
                     "enable_table": enable_table
@@ -97,7 +107,8 @@ class MinerUAdapter:
             cos_key_prefix = f"{settings.cos_temp_prefix}/mineru_images/{cos_key.replace('/', '_')}"
             content_list, image_cos_keys = await self._download_and_parse(
                 result["full_zip_url"],
-                cos_key_prefix=cos_key_prefix
+                cos_key_prefix=cos_key_prefix,
+                user_id=user_id
             )
 
             # 步骤5: 获取原始图片尺寸
@@ -381,7 +392,8 @@ class MinerUAdapter:
     async def _download_and_parse(
         self,
         zip_url: str,
-        cos_key_prefix: Optional[str] = None
+        cos_key_prefix: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
         """
         下载并解析ZIP文件，并提取图片上传到COS
@@ -389,6 +401,7 @@ class MinerUAdapter:
         Args:
             zip_url: ZIP文件下载链接
             cos_key_prefix: COS存储键前缀（用于组织图片存储）
+            user_id: 用户ID（可选，用于将装饰图添加到图片管理）
 
         Returns:
             Tuple: (content_list.json内容, 图片路径到COS key的映射)
@@ -452,9 +465,9 @@ class MinerUAdapter:
                 )
                 raise Exception(f"解析content_list文件失败: {str(e)}")
 
-            # 提取并上传图片到COS
+            # 提取并上传图片到COS，并添加到图片管理
             image_path_to_cos_key = await self._extract_and_upload_images(
-                zip_file, file_list, content_list, cos_key_prefix
+                zip_file, file_list, content_list, cos_key_prefix, user_id
             )
 
             return content_list, image_path_to_cos_key
@@ -464,16 +477,18 @@ class MinerUAdapter:
         zip_file: zipfile.ZipFile,
         file_list: List[str],
         content_list: List[Dict[str, Any]],
-        cos_key_prefix: Optional[str] = None
+        cos_key_prefix: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> Dict[str, str]:
         """
-        从ZIP中提取图片并上传到COS
+        从ZIP中提取图片并上传到COS，同时添加到图片管理
 
         Args:
             zip_file: ZIP文件对象
             file_list: ZIP中的文件列表
             content_list: content_list.json内容
             cos_key_prefix: COS存储键前缀
+            user_id: 用户ID（可选，用于将装饰图添加到图片管理）
 
         Returns:
             Dict: 图片路径到COS key的映射 {"images/xxx.jpg": "cos_key"}
@@ -530,7 +545,7 @@ class MinerUAdapter:
                     cos_key = f"{settings.cos_temp_prefix}/mineru/{unique_filename}"
 
                 # 上传到COS
-                await self.storage_service.upload(
+                upload_result = await self.storage_service.upload(
                     img_data, cos_key, mime_type
                 )
 
@@ -544,6 +559,17 @@ class MinerUAdapter:
                         "size": len(img_data)
                     }
                 )
+
+                # 如果有数据库会话和用户ID，将装饰图添加到图片管理
+                if self.db and user_id:
+                    await self._add_decoration_to_image_management(
+                        cos_key=cos_key,
+                        cos_url=upload_result.url,
+                        file_size=len(img_data),
+                        mime_type=mime_type,
+                        user_id=user_id,
+                        original_filename=img_path
+                    )
 
             except Exception as e:
                 logger.error(
@@ -593,6 +619,71 @@ class MinerUAdapter:
         }
 
         return mime_to_ext.get(mime_type, ".jpg")
+
+    async def _add_decoration_to_image_management(
+        self,
+        cos_key: str,
+        cos_url: str,
+        file_size: int,
+        mime_type: str,
+        user_id: str,
+        original_filename: str
+    ):
+        """
+        将装饰图添加到图片管理
+        
+        Args:
+            cos_key: COS存储键
+            cos_url: COS图片URL
+            file_size: 文件大小
+            mime_type: MIME类型
+            user_id: 用户ID
+            original_filename: 原始文件名（来自mineru的路径）
+        """
+        try:
+            from app.repositories.image import ImageRepository
+            from app.schemas.image_manager import ImageCreate
+            
+            # 从原始路径提取文件名
+            filename = original_filename.split("/")[-1] if "/" in original_filename else original_filename
+            
+            # 创建图片记录
+            image_data = ImageCreate(
+                original_filename=f"decoration_{filename}",
+                file_size=file_size,
+                mime_type=mime_type,
+                description="MinerU解析PPT提取的装饰图",
+                tags=["decoration", "mineru"],
+                is_public=False,
+                image_url=cos_url,
+                cos_key=cos_key,
+                cos_bucket=settings.cos_bucket,
+                cos_region=settings.cos_region,
+                source_type="mineru_decoration"
+            )
+            
+            repository = ImageRepository(self.db)
+            image = await repository.create_image(image_data, user_id)
+            
+            logger.info(
+                "装饰图已添加到图片管理",
+                extra={
+                    "image_id": image.id,
+                    "cos_key": cos_key,
+                    "user_id": user_id
+                }
+            )
+            
+        except Exception as e:
+            logger.error(
+                "添加装饰图到图片管理失败",
+                extra={
+                    "cos_key": cos_key,
+                    "user_id": user_id,
+                    "error": str(e)
+                }
+            )
+            # 不抛出异常，避免影响主流程
 
     async def _get_image_size(self, cos_key: str) -> Dict[str, int]:
         """

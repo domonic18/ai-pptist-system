@@ -137,11 +137,12 @@ class ImageEditingService:
             mineru_fusion = self._get_mineru_fusion()
 
             # 执行MinerU识别
-            logger.info("开始MinerU识别", extra={"task_id": task_id, "cos_key": cos_key})
+            logger.info("开始MinerU识别", extra={"task_id": task_id, "cos_key": cos_key, "user_id": user_id})
             result = await mineru_fusion.recognize_image(
                 cos_key=cos_key,
                 task_id=task_id,
                 slide_id=slide_id,
+                user_id=user_id,
                 enable_formula=enable_formula,
                 enable_table=enable_table,
                 enable_style_recognition=enable_style_recognition
