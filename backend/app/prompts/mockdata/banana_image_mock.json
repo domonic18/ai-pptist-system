@@ -1,0 +1,67 @@
+{
+  "title": "Banana图片Mock数据",
+  "description": "用于Mock文生图生成的测试数据，包含真实的COS图片路径",
+  "slides": [
+    {
+      "slideIndex": 0,
+      "cosKey": "ai-generated/ppt/banana_20251226_162840_e3a8f1af/slide_0.png",
+      "description": "第1页图片"
+    },
+    {
+      "slideIndex": 1,
+      "cosKey": "ai-generated/ppt/banana_20251226_162840_e3a8f1af/slide_1.png",
+      "description": "第2页图片"
+    },
+    {
+      "slideIndex": 2,
+      "cosKey": "ai-generated/ppt/banana_20251226_162840_e3a8f1af/slide_3.png",
+      "description": "第4页图片（用于第3页）"
+    },
+    {
+      "slideIndex": 3,
+      "cosKey": "ai-generated/ppt/banana_20251226_162840_e3a8f1af/slide_3.png",
+      "description": "第4页图片"
+    },
+    {
+      "slideIndex": 4,
+      "cosKey": "ai-generated/ppt/banana_20251226_162840_e3a8f1af/slide_5.png",
+      "description": "第6页图片（用于第5页）"
+    },
+    {
+      "slideIndex": 5,
+      "cosKey": "ai-generated/ppt/banana_20251226_162840_e3a8f1af/slide_5.png",
+      "description": "第6页图片"
+    },
+    {
+      "slideIndex": 6,
+      "cosKey": "ai-generated/ppt/banana_20251226_162840_e3a8f1af/slide_6.png",
+      "description": "第7页图片"
+    },
+    {
+      "slideIndex": 7,
+      "cosKey": "ai-generated/ppt/banana_20251226_162840_e3a8f1af/slide_7.png",
+      "description": "第8页图片"
+    },
+    {
+      "slideIndex": 8,
+      "cosKey": "ai-generated/ppt/banana_20251226_162840_e3a8f1af/slide_8.png",
+      "description": "第9页图片"
+    },
+    {
+      "slideIndex": 9,
+      "cosKey": "ai-generated/ppt/banana_20251226_162840_e3a8f1af/slide_9.png",
+      "description": "第10页图片"
+    },
+    {
+      "slideIndex": 10,
+      "cosKey": "ai-generated/ppt/banana_20251226_162840_e3a8f1af/slide_10.png",
+      "description": "第11页图片"
+    },
+    {
+      "slideIndex": 11,
+      "cosKey": "ai-generated/ppt/banana_20251226_162840_e3a8f1af/slide_11.png",
+      "description": "第12页图片"
+    }
+  ]
+}
+
