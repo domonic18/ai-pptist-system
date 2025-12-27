@@ -109,15 +109,26 @@ def _execute_slide_generation(
                         canvas_size=canvas_size
                     )
 
-                    if not result or 'pil_image' not in result:
-                        raise ValueError("生成结果未包含PIL图像")
-
-                    # B. 上传到腾讯云COS
-                    cos_url = await generator.upload_image_to_cos(
-                        task_id=task_id,
-                        slide_index=slide_index,
-                        image=result['pil_image']
-                    )
+                    # B. 处理COS URL和COS Path（支持Mock模式和正常模式）
+                    if result.get('mock_mode'):
+                        # Mock模式：直接使用测试数据中的cos_url和cos_key
+                        cos_url = result['mock_cos_url']
+                        cos_path = result['mock_cos_key']  # 使用Mock数据的真实cos_key
+                        logger.info("Mock模式：使用预置cos_url", extra={
+                            "slide_index": slide_index,
+                            "cos_url": cos_url,
+                            "cos_path": cos_path
+                        })
+                    else:
+                        # 正常模式：上传到腾讯云COS
+                        if not result or 'pil_image' not in result:
+                            raise ValueError("生成结果未包含PIL图像")
+                        cos_url = await generator.upload_image_to_cos(
+                            task_id=task_id,
+                            slide_index=slide_index,
+                            image=result['pil_image']
+                        )
+                        cos_path = generator.build_cos_path(task_id, slide_index)
 
                     # C. 更新Redis状态
                     await generator.update_slide_result_in_redis(
@@ -125,7 +136,8 @@ def _execute_slide_generation(
                         task_id=task_id,
                         slide_index=slide_index,
                         generation_result=result,
-                        cos_url=cos_url
+                        cos_url=cos_url,
+                        cos_path=cos_path  # 传入正确的cos_path
                     )
                     
                     return cos_url, result

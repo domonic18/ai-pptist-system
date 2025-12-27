@@ -4,7 +4,9 @@ Banana幻灯片生成器
 """
 
 import time
-from typing import Dict, Any
+import json
+from pathlib import Path
+from typing import Dict, Any, List, Optional
 from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +34,37 @@ class BananaSlideGenerator:
         self.db = db
         self.prompt_service = BananaPromptService()
         self._providers = []  # 记录创建的 provider，以便关闭
+        
+        # Mock数据
+        self._mock_cos_keys: List[str] = []
+        self._load_mock_data()
+
+    def _load_mock_data(self):
+        """加载Mock数据（如果开关开启）"""
+        if not settings.enable_banana_image_mock:
+            return
+        
+        try:
+            mock_file = Path(settings.absolute_mockdata_dir) / "banana_image_mock.json"
+            if not mock_file.exists():
+                logger.warning(f"Mock数据文件不存在: {mock_file}")
+                return
+            
+            with open(mock_file, 'r', encoding='utf-8') as f:
+                mock_data = json.load(f)
+            
+            # 提取所有cosKey
+            slides = mock_data.get('slides', [])
+            self._mock_cos_keys = [slide['cosKey'] for slide in slides if 'cosKey' in slide]
+            
+            logger.info(f"已加载Mock数据，共 {len(self._mock_cos_keys)} 个COS Key", extra={
+                "mock_file": str(mock_file),
+                "cos_keys_count": len(self._mock_cos_keys)
+            })
+        except Exception as e:
+            logger.error(f"加载Mock数据失败: {e}", extra={
+                "exception_type": type(e).__name__
+            })
 
     async def close(self):
         """关闭所有创建的 provider，释放资源"""
@@ -41,6 +74,51 @@ class BananaSlideGenerator:
             except Exception as e:
                 logger.warning(f"关闭 AI Provider 失败: {e}")
         self._providers = []
+
+    def _generate_mock_slide(self, slide_index: int) -> Dict[str, Any]:
+        """
+        生成Mock幻灯片（直接返回预置的COS URL，不进行实际生成和上传）
+        
+        Args:
+            slide_index: 幻灯片索引
+            
+        Returns:
+            Dict: Mock结果，包含mock_mode和mock_cos_url
+        """
+        start_time = time.time()
+        
+        logger.info("使用Mock模式生成幻灯片", extra={
+            "slide_index": slide_index,
+            "available_mock_images": len(self._mock_cos_keys)
+        })
+        
+        # 循环使用mock数据
+        mock_index = slide_index % len(self._mock_cos_keys)
+        mock_cos_key = self._mock_cos_keys[mock_index]
+        
+        # 构建mock图片的cos_url（公开URL格式）
+        mock_cos_url = f"{settings.cos_scheme}://{settings.cos_bucket}.cos.{settings.cos_region}.myqcloud.com/{mock_cos_key}"
+        
+        generation_time = time.time() - start_time
+        
+        logger.info("使用Mock模式，直接返回已有cos_url", extra={
+            "slide_index": slide_index,
+            "mock_index": mock_index,
+            "mock_cos_key": mock_cos_key,
+            "mock_cos_url": mock_cos_url,
+            "generation_time": round(generation_time, 2)
+        })
+        
+        # 返回mock结果，标记为mock模式，直接提供cos_url
+        return {
+            "pil_image": None,  # mock模式不需要PIL图片
+            "generation_time": generation_time,
+            "prompt": f"Mock prompt for slide {slide_index}",
+            "provider_response": {"mock": True, "mock_cos_key": mock_cos_key},
+            "mock_mode": True,  # 标记为mock模式
+            "mock_cos_url": mock_cos_url,  # 直接提供mock的cos_url
+            "mock_cos_key": mock_cos_key  # 提供mock的cos_key用于cos_path
+        }
 
     @staticmethod
     def build_cos_path(task_id: str, slide_index: int) -> str:
@@ -78,6 +156,10 @@ class BananaSlideGenerator:
         Returns:
             Dict: 生成结果，包含pil_image、generation_time等
         """
+        # 检查Mock开关
+        if settings.enable_banana_image_mock and self._mock_cos_keys:
+            return self._generate_mock_slide(slide_index)
+        
         start_time = time.time()
         logger.info("开始生成幻灯片图片", extra={
             "slide_index": slide_index,
@@ -319,7 +401,8 @@ class BananaSlideGenerator:
         task_id: str,
         slide_index: int,
         generation_result: Dict[str, Any],
-        cos_url: str
+        cos_url: str,
+        cos_path: Optional[str] = None
     ):
         """
         在Redis中更新幻灯片的生成结果
@@ -330,8 +413,13 @@ class BananaSlideGenerator:
             slide_index: 幻灯片索引
             generation_result: 生成结果
             cos_url: COS图片URL
+            cos_path: COS路径（可选，如果不提供则自动构建）
         """
         task_manager = BananaTaskManager(redis_client)
+        
+        # 如果没有提供cos_path，则使用默认构建方式
+        if cos_path is None:
+            cos_path = self.build_cos_path(task_id, slide_index)
 
         await task_manager.update_slide_status(
             task_id=task_id,
@@ -339,12 +427,13 @@ class BananaSlideGenerator:
             status="completed",
             image_url=cos_url,
             generation_time=generation_result["generation_time"],
-            cos_path=self.build_cos_path(task_id, slide_index),
+            cos_path=cos_path,
             prompt=generation_result["prompt"]
         )
 
         logger.info("更新Redis中的幻灯片结果", extra={
             "task_id": task_id,
             "slide_index": slide_index,
-            "cos_url": cos_url
+            "cos_url": cos_url,
+            "cos_path": cos_path
         })
