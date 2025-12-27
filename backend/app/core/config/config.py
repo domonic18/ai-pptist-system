@@ -102,6 +102,7 @@ class Settings(BaseSettings):
     enable_outline_mock: bool = False
     enable_slides_mock: bool = False
     enable_banana_outline_split_mock: bool = False
+    enable_banana_image_mock: bool = False
 
     # ==================== 日志配置 ====================
     log_level: str = "INFO"
