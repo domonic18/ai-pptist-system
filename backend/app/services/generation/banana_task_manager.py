@@ -137,15 +137,17 @@ class BananaTaskManager:
         else:
             overall_status = "pending"  # 都还没开始
 
-        # 保存总进度
+        # 保存总进度（新格式：将计数信息嵌套在progress对象下）
         progress_key = f"banana:task:{task_id}:progress"
         progress_data = {
             "task_id": task_id,
             "status": overall_status,
-            "total": total_slides,
-            "completed": completed_count,
-            "failed": failed_count,
-            "pending": total_slides - completed_count - failed_count - processing_count,
+            "progress": {
+                "total": total_slides,
+                "completed": completed_count,
+                "failed": failed_count,
+                "pending": total_slides - completed_count - failed_count - processing_count
+            },
             "slides": slides_data,  # 包含所有页面的状态和COS图片URL
             "updated_at": datetime.utcnow().isoformat()
         }
@@ -181,14 +183,16 @@ class BananaTaskManager:
                 logger.error(f"Redis数据解析失败: {e}")
                 return None
         else:
-            # 如果Redis中没有，返回初始状态
+            # 如果Redis中没有，返回初始状态（新格式）
             return {
                 "task_id": task_id,
                 "status": "pending",
-                "total": 0,
-                "completed": 0,
-                "failed": 0,
-                "pending": 0,
+                "progress": {
+                    "total": 0,
+                    "completed": 0,
+                    "failed": 0,
+                    "pending": 0
+                },
                 "slides": []
             }
 

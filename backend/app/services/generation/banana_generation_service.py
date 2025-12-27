@@ -312,7 +312,12 @@ class BananaGenerationService:
 
         progress_data = await self.task_manager.get_task_progress(task_id)
 
-        if progress_data is None or progress_data.get("total", 0) == 0:
+        # 检查Redis数据是否有效（新格式：progress嵌套）
+        progress_total = 0
+        if progress_data and "progress" in progress_data:
+            progress_total = progress_data.get("progress", {}).get("total", 0)
+        
+        if progress_data is None or progress_total == 0:
             # 从数据库获取任务信息
             task = await self.repo.get_task(task_id)
 
@@ -320,20 +325,24 @@ class BananaGenerationService:
                 return {
                     "task_id": task_id,
                     "status": "not_found",
-                    "total": 0,
-                    "completed": 0,
-                    "failed": 0,
-                    "pending": 0,
+                    "progress": {
+                        "total": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "pending": 0
+                    },
                     "slides": []
                 }
 
             progress_data = {
                 "task_id": task_id,
                 "status": task.status.value if hasattr(task.status, 'value') else str(task.status),
-                "total": task.total_slides,
-                "completed": task.completed_slides,
-                "failed": task.failed_slides,
-                "pending": max(0, task.total_slides - task.completed_slides - task.failed_slides),
+                "progress": {
+                    "total": task.total_slides,
+                    "completed": task.completed_slides,
+                    "failed": task.failed_slides,
+                    "pending": max(0, task.total_slides - task.completed_slides - task.failed_slides)
+                },
                 "slides": []
             }
 
