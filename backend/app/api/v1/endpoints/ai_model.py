@@ -17,7 +17,7 @@ from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["AI Model Management"])
+router = APIRouter(tags=["AI模型管理"])
 
 
 @router.get(

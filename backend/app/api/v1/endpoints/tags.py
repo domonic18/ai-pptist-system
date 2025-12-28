@@ -15,7 +15,7 @@ from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["Tags"])
+router = APIRouter(tags=["标签管理"])
 
 
 @router.get(

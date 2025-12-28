@@ -16,7 +16,7 @@ from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["Image Management"])
+router = APIRouter(tags=["图片管理"])
 
 
 @router.get(

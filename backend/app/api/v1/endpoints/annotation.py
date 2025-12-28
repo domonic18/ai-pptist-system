@@ -24,7 +24,7 @@ from app.core.log_messages import log_messages
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["Annotation"])
+router = APIRouter(tags=["自动标注"])
 
 
 @router.post(

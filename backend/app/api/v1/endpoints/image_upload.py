@@ -16,7 +16,7 @@ from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["Image Upload"])
+router = APIRouter(tags=["图片上传"])
 
 
 @router.post(

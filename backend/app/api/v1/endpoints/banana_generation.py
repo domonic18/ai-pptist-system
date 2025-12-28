@@ -18,7 +18,7 @@ from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["Banana Generation"])
+router = APIRouter(tags=["Banana生成"])
 
 
 # 辅助函数：获取当前用户ID

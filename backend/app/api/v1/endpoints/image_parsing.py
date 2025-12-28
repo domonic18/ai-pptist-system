@@ -14,7 +14,7 @@ from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["Image Parsing"])
+router = APIRouter(tags=["图片解析"])
 
 
 # 辅助函数：获取当前用户ID
