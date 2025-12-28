@@ -3,18 +3,22 @@ Banana生成PPT API端点
 提供批量生成PPT幻灯片图片的功能
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query
-from typing import Dict, Any, Optional
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-import uuid
-from datetime import datetime
 
-from app.services.generation.banana_generation_service import BananaGenerationService
 from app.db.database import get_db
+from app.services.generation.banana_generation_handler import BananaGenerationHandler
+from app.schemas.banana_generation import (
+    SplitOutlineRequest,
+    GenerateBatchSlidesRequest,
+    RegenerateSlideRequest,
+)
+from app.schemas.common import StandardResponse
 from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)
+
+router = APIRouter(tags=["Banana Generation"])
 
 
 # 辅助函数：获取当前用户ID
@@ -24,139 +28,49 @@ def get_current_user_id():
     return "demo_001"
 
 
-router = APIRouter(tags=["banana"])
-
-
-# 请求和响应模型（已在frontend中定义，这里添加，因为架构设计说明需要）
-
-class OutlineData(BaseModel):
-    """PPT大纲数据"""
-    title: str = Field(..., description="PPT主标题")
-    slides: list[dict] = Field(..., description="幻灯片列表，每个包含title和points")
-
-
-class SplitOutlineRequest(BaseModel):
-    """大纲拆分请求"""
-    content: str = Field(..., description="原始Markdown大纲内容")
-    ai_model_id: str = Field(..., description="用于拆分的AI模型ID")
-
-
-class CanvasSize(BaseModel):
-    """画布尺寸"""
-    width: float = Field(default=1920, description="画布宽度")
-    height: float = Field(default=1080, description="画布高度")
-
-
-class GenerateBatchSlidesRequest(BaseModel):
-    """批量生成PPT请求"""
-    outline: OutlineData = Field(..., description="PPT大纲数据")
-    template_id: Optional[str] = Field(None, description="模板ID（与custom_template_url二选一）")
-    custom_template_url: Optional[str] = Field(None, description="自定义模板图片URL（与template_id二选一）")
-    generation_model: str = Field(default="gemini-3-pro-image-preview", description="生成模型名称")
-    canvas_size: CanvasSize = Field(default_factory=CanvasSize, description="画布尺寸")
-
-
-class GenerateBatchSlidesResponse(BaseModel):
-    """批量生成响应"""
-    task_id: str = Field(..., description="生成任务ID")
-    celery_task_id: str = Field(..., description="Celery任务ID")
-    total_slides: int = Field(..., description="总幻灯片数")
-    status: str = Field(default="processing", description="任务状态")
-
-
-class SlideGenerationResult(BaseModel):
-    """单页生成结果"""
-    index: int = Field(..., description="幻灯片索引")
-    title: Optional[str] = Field(None, description="标题")
-    status: str = Field(..., description="状态: pending|processing|completed|failed")
-    image_url: Optional[str] = Field(None, description="COS图片URL")
-    cos_path: Optional[str] = Field(None, description="COS存储路径")
-    generation_time: Optional[float] = Field(None, description="生成耗时(秒)")
-    error: Optional[str] = Field(None, description="错误信息")
-
-
-class GenerationStatusResponse(BaseModel):
-    """生成状态响应"""
-    task_id: str = Field(..., description="任务ID")
-    status: str = Field(..., description="任务状态")
-    progress: dict = Field(..., description="进度信息: {total, completed, failed, pending}")
-    slides: list[SlideGenerationResult] = Field(..., description="每页状态列表")
-
-
-class TemplateResponse(BaseModel):
-    """模板列表响应"""
-    templates: list[dict] = Field(..., description="模板列表")
-
-
-class StopGenerationResponse(BaseModel):
-    """停止生成响应"""
-    task_id: str = Field(..., description="任务ID")
-    status: str = Field(..., description="任务状态")
-    completed_slides: int = Field(..., description="已完成的幻灯片数")
-    total_slides: int = Field(..., description="总幻灯片数")
-
-
-# API端点实现
-
-@router.post("/split_outline", response_model=Dict[str, Any])
+@router.post(
+    "/split_outline",
+    response_model=StandardResponse,
+    summary="拆分大纲",
+    description="将Markdown大纲拆分为结构化的幻灯片数据"
+)
 async def split_outline(
     request: SplitOutlineRequest,
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id)
-):
+) -> StandardResponse:
     """
     将Markdown大纲拆分为结构化的幻灯片数据
-    
+
     Args:
         request: 包含原始大纲内容和模型ID的请求
-        
+        db: 数据库会话
+        user_id: 当前用户ID
+
     Returns:
-        Dict: 结构化的幻灯片数据 {title, slides: [{title, points}]}
+        StandardResponse: 结构化的幻灯片数据 {title, slides: [{title, points}]}
     """
-    try:
-        logger.info("收到大纲拆分请求", extra={
-            "content_len": len(request.content),
-            "ai_model_id": request.ai_model_id
-        })
+    handler = BananaGenerationHandler(db)
+    data = await handler.handle_split_outline(request)
 
-        service = BananaGenerationService(db)
-        result = await service.split_outline(
-            content=request.content,
-            ai_model_id=request.ai_model_id
-        )
-
-        return {
-            "success": True,
-            "data": result,
-            "error": None,
-            "timestamp": datetime.utcnow().isoformat(),
-            "request_id": str(uuid.uuid4())
-        }
-
-    except Exception as e:
-        logger.error("大纲拆分失败", extra={
-            "error": str(e),
-            "ai_model_id": request.ai_model_id
-        })
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "success": False,
-                "data": None,
-                "error": {"message": str(e), "code": "OUTLINE_SPLIT_FAILED"},
-                "timestamp": datetime.utcnow().isoformat(),
-                "request_id": str(uuid.uuid4())
-            }
-        )
+    return StandardResponse(
+        status="success",
+        message="大纲拆分成功",
+        data=data
+    )
 
 
-@router.post("/generate_batch_slides", response_model=Dict[str, Any])
+@router.post(
+    "/generate_batch_slides",
+    response_model=StandardResponse,
+    summary="批量生成PPT",
+    description="批量生成PPT幻灯片图片，返回任务ID供轮询"
+)
 async def generate_batch_slides(
     request: GenerateBatchSlidesRequest,
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id)
-):
+) -> StandardResponse:
     """
     批量生成PPT幻灯片图片
 
@@ -168,74 +82,32 @@ async def generate_batch_slides(
 
     Args:
         request: 包含大纲、模板ID、生成模型等信息的请求
+        db: 数据库会话
         user_id: 当前用户ID
 
     Returns:
-        Dict: 包含task_id、total_slides、status的任务信息
+        StandardResponse: 包含task_id、total_slides、status的任务信息
     """
-    try:
-        # 验证template_id和custom_template_url至少有一个
-        if not request.template_id and not request.custom_template_url:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "success": False,
-                    "data": None,
-                    "error": {"message": "template_id和custom_template_url必须提供其中一个", "code": "MISSING_TEMPLATE"},
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "request_id": str(uuid.uuid4())
-                }
-            )
+    handler = BananaGenerationHandler(db)
+    data = await handler.handle_generate_batch_slides(request, user_id)
 
-        logger.info("收到批量生成PPT请求", extra={
-            "template_id": request.template_id,
-            "custom_template_url": request.custom_template_url[:100] if request.custom_template_url else None,
-            "total_slides": len(request.outline.slides),
-            "generation_model": request.generation_model
-        })
-
-        service = BananaGenerationService(db)
-
-        result = await service.generate_batch_slides(
-            outline=request.outline.dict(),
-            template_id=request.template_id,
-            custom_template_url=request.custom_template_url,
-            generation_model=request.generation_model,
-            canvas_size=request.canvas_size.dict(),
-            user_id=user_id
-        )
-
-        return {
-            "success": True,
-            "data": result,
-            "error": None,
-            "timestamp": datetime.utcnow().isoformat(),
-            "request_id": str(uuid.uuid4())
-        }
-
-    except Exception as e:
-        logger.error("批量生成PPT失败", extra={
-            "error": str(e),
-            "template_id": request.template_id
-        })
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "success": False,
-                "data": None,
-                "error": {"message": str(e), "code": "GENERATION_FAILED"},
-                "timestamp": datetime.utcnow().isoformat(),
-                "request_id": str(uuid.uuid4())
-            }
-        )
+    return StandardResponse(
+        status="success",
+        message=f"PPT生成任务已创建，共{data.get('total_slides')}张幻灯片",
+        data=data
+    )
 
 
-@router.get("/generation_status/{task_id}", response_model=Dict[str, Any])
+@router.get(
+    "/generation_status/{task_id}",
+    response_model=StandardResponse,
+    summary="查询生成状态",
+    description="查询生成任务状态（前端轮询端点）"
+)
 async def get_generation_status(
     task_id: str,
     db: AsyncSession = Depends(get_db)
-):
+) -> StandardResponse:
     """
     查询生成任务状态（前端轮询端点）
 
@@ -244,53 +116,31 @@ async def get_generation_status(
 
     Args:
         task_id: 生成任务ID
+        db: 数据库会话
 
     Returns:
-        Dict: 包含任务状态、进度、每页详细状态（含COS图片URL）
+        StandardResponse: 包含任务状态、进度、每页详细状态（含COS图片URL）
     """
-    try:
-        service = BananaGenerationService(db)
+    handler = BananaGenerationHandler(db)
+    data = await handler.handle_get_generation_status(task_id)
 
-        status_data = await service.get_generation_status(task_id)
-
-        logger.debug("查询生成状态", extra={
-            "task_id": task_id,
-            "status": status_data.get("status"),
-            "completed": status_data.get("progress", {}).get("completed", 0),
-            "total": status_data.get("progress", {}).get("total", 0)
-        })
-
-        return {
-            "success": True,
-            "data": status_data,
-            "error": None,
-            "timestamp": datetime.utcnow().isoformat(),
-            "request_id": str(uuid.uuid4())
-        }
-
-    except Exception as e:
-        logger.error("查询生成状态失败", extra={
-            "task_id": task_id,
-            "error": str(e)
-        })
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "success": False,
-                "data": None,
-                "error": {"message": str(e), "code": "STATUS_QUERY_FAILED"},
-                "timestamp": datetime.utcnow().isoformat(),
-                "request_id": str(uuid.uuid4())
-            }
-        )
+    return StandardResponse(
+        status="success",
+        message="查询成功",
+        data=data
+    )
 
 
-@router.post("/stop_generation/{task_id}", response_model=Dict[str, Any])
+@router.post(
+    "/stop_generation/{task_id}",
+    response_model=StandardResponse,
+    summary="停止生成",
+    description="停止正在进行的生成任务"
+)
 async def stop_generation(
     task_id: str,
     db: AsyncSession = Depends(get_db)
-):
+) -> StandardResponse:
     """
     停止生成任务
 
@@ -298,52 +148,32 @@ async def stop_generation(
 
     Args:
         task_id: 任务ID
+        db: 数据库会话
 
     Returns:
-        Dict: 停止结果
+        StandardResponse: 停止结果
     """
-    try:
-        service = BananaGenerationService(db)
+    handler = BananaGenerationHandler(db)
+    data = await handler.handle_stop_generation(task_id)
 
-        result = await service.stop_generation(task_id)
-
-        logger.info("停止生成任务", extra={
-            "task_id": task_id,
-            "completed_slides": result.get("completed_slides")
-        })
-
-        return {
-            "success": True,
-            "data": result,
-            "error": None,
-            "timestamp": datetime.utcnow().isoformat(),
-            "request_id": str(uuid.uuid4())
-        }
-
-    except Exception as e:
-        logger.error("停止生成失败", extra={
-            "task_id": task_id,
-            "error": str(e)
-        })
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "success": False,
-                "data": None,
-                "error": {"message": str(e), "code": "STOP_FAILED"},
-                "timestamp": datetime.utcnow().isoformat(),
-                "request_id": str(uuid.uuid4())
-            }
-        )
+    return StandardResponse(
+        status="success",
+        message=f"任务已停止，已完成{data.get('completed_slides')}/{data.get('total_slides')}张",
+        data=data
+    )
 
 
-@router.post("/regenerate_slide", response_model=Dict[str, Any])
+@router.post(
+    "/regenerate_slide",
+    response_model=StandardResponse,
+    summary="重新生成单张幻灯片",
+    description="重新生成失败的幻灯片或不满意的结果"
+)
 async def regenerate_slide(
-    request: dict,
+    request: RegenerateSlideRequest,
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id)
-):
+) -> StandardResponse:
     """
     重新生成单张幻灯片
 
@@ -351,60 +181,33 @@ async def regenerate_slide(
 
     Args:
         request: 包含task_id和slide_index的请求
+        db: 数据库会话
         user_id: 当前用户ID
 
     Returns:
-        Dict: 包含slide_index、status、celery_task_id的结果
+        StandardResponse: 包含slide_index、status、celery_task_id的结果
     """
-    try:
-        task_id = request.get("task_id")
-        slide_index = request.get("slide_index")
+    handler = BananaGenerationHandler(db)
+    data = await handler.handle_regenerate_slide(request, user_id)
 
-        if not task_id or slide_index is None:
-            raise ValueError("task_id和slide_index是必填参数")
-
-        service = BananaGenerationService(db)
-
-        result = await service.regenerate_slide(task_id, slide_index)
-
-        logger.info("重新生成幻灯片", extra={
-            "task_id": task_id,
-            "slide_index": slide_index
-        })
-
-        return {
-            "success": True,
-            "data": result,
-            "error": None,
-            "timestamp": datetime.utcnow().isoformat(),
-            "request_id": str(uuid.uuid4())
-        }
-
-    except Exception as e:
-        logger.error("重新生成失败", extra={
-            "task_id": request.get("task_id"),
-            "slide_index": request.get("slide_index"),
-            "error": str(e)
-        })
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "success": False,
-                "data": None,
-                "error": {"message": str(e), "code": "REGENERATE_FAILED"},
-                "timestamp": datetime.utcnow().isoformat(),
-                "request_id": str(uuid.uuid4())
-            }
-        )
+    return StandardResponse(
+        status="success",
+        message=f"第{request.slide_index + 1}张幻灯片重新生成任务已创建",
+        data=data
+    )
 
 
-@router.get("/templates", response_model=Dict[str, Any])
+@router.get(
+    "/templates",
+    response_model=StandardResponse,
+    summary="获取模板列表",
+    description="获取可用的PPT模板列表"
+)
 async def get_templates(
     type: str = Query(None, description="模板类型: system|user"),
     aspect_ratio: str = Query(None, description="宽高比: 16:9|4:3"),
     db: AsyncSession = Depends(get_db)
-):
+) -> StandardResponse:
     """
     获取可用模板列表
 
@@ -413,43 +216,16 @@ async def get_templates(
     Args:
         type: 模板类型过滤（可选）
         aspect_ratio: 宽高比过滤（可选）
+        db: 数据库会话
 
     Returns:
-        Dict: 包含templates数组
+        StandardResponse: 包含templates数组
     """
-    try:
-        service = BananaGenerationService(db)
+    handler = BananaGenerationHandler(db)
+    data = await handler.handle_get_templates(type, aspect_ratio)
 
-        result = await service.get_templates(template_type=type, aspect_ratio=aspect_ratio)
-
-        logger.info("获取模板列表", extra={
-            "template_count": len(result.get("templates", [])),
-            "type": type,
-            "aspect_ratio": aspect_ratio
-        })
-
-        return {
-            "success": True,
-            "data": result,
-            "error": None,
-            "timestamp": datetime.utcnow().isoformat(),
-            "request_id": str(uuid.uuid4())
-        }
-
-    except Exception as e:
-        logger.error("获取模板列表失败", extra={
-            "error": str(e),
-            "type": type,
-            "aspect_ratio": aspect_ratio
-        })
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "success": False,
-                "data": None,
-                "error": {"message": str(e), "code": "GET_TEMPLATES_FAILED"},
-                "timestamp": datetime.utcnow().isoformat(),
-                "request_id": str(uuid.uuid4())
-            }
-        )
+    return StandardResponse(
+        status="success",
+        message=f"获取到{len(data.get('templates', []))}个模板",
+        data=data
+    )
