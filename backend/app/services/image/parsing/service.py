@@ -10,7 +10,7 @@ import json
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.image_parsing import ImageParsingRepository
-from app.services.ocr.multimodal_ocr_engine import MultimodalOCREngine
+from app.core.ocr.multimodal_ocr_engine import MultimodalOCREngine
 from app.schemas.image_parsing import (
     TextRegion, ParseMetadata, ImageParseResult,
 )
