@@ -29,9 +29,9 @@ class TestModuleImports:
 
     def test_service_imports(self):
         """测试服务模块导入"""
-        from app.services.image.management_service import ManagementService
+        from app.services.image.management.service import ManagementService
         from app.core.storage import COSStorage
-        from app.services.image.upload_service import ImageUploadService
+        from app.services.image.upload.service import ImageUploadService
         assert ManagementService is not None
         assert COSStorage is not None
         assert ImageUploadService is not None

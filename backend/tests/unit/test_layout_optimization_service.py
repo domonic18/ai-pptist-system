@@ -5,7 +5,7 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.services.layout.layout_optimization_service import LayoutOptimizationService
+from app.services.layout.optimization.service import LayoutOptimizationService
 from app.schemas.layout_optimization import ElementData, CanvasSize, OptimizationOptions
 
 

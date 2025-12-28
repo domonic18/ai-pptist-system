@@ -8,7 +8,7 @@ import time
 import json
 from unittest.mock import Mock, AsyncMock, patch
 
-from app.services.cache.url_cache import (
+from app.services.cache.url.cache import (
     ImageURLCache, URLCacheEntry, CacheStrategy
 )
 from app.core.redis import RedisClient
