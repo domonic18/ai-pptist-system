@@ -5,7 +5,7 @@ AI生成API端点
 
 from typing import AsyncGenerator, Dict, Any
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,7 @@ from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["AI Generation"])
+router = APIRouter(tags=["AI生成"])
 
 
 @router.post(
@@ -140,21 +140,31 @@ async def generate_image(
     Returns:
         StandardResponse: 生成结果
     """
-    handler = ImageGenerationHandler(db)
-    result = await handler.handle_generate_image(request_data)
+    try:
+        handler = ImageGenerationHandler(db)
+        result = await handler.handle_generate_image(request_data)
 
-    if result["success"]:
-        return StandardResponse(
-            success=True,
-            data=result,
-            message=result.get("message", "图片生成成功")
-        )
-    else:
-        return StandardResponse(
-            success=False,
-            data=result,
-            message=result.get("message", "图片生成失败")
-        )
+        if result.get("success"):
+            return StandardResponse(
+                status="success",
+                message=result.get("message", "图片生成成功"),
+                data=result
+            )
+        else:
+            return StandardResponse(
+                status="error",
+                message=result.get("message", "图片生成失败"),
+                data=result
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("生成图片失败", extra={'error': str(e)})
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"生成图片失败: {str(e)}"
+        ) from e
 
 
 @router.post(

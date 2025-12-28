@@ -11,13 +11,13 @@ from fastapi.responses import StreamingResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.services.cache.image_url_service import get_image_url_service
+from app.services.cache.image_proxy_handler import ImageProxyHandler
 from app.core.log_utils import get_logger
 from app.schemas.common import StandardResponse
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["Image Proxy"])
+router = APIRouter(tags=["图片代理"])
 
 
 @router.get(
@@ -51,11 +51,11 @@ async def proxy_image(
         RedirectResponse: 重定向模式的302响应
     """
     start_time = time.time()
-    service = await get_image_url_service()
+    handler = ImageProxyHandler(db)
 
     try:
         # 获取图片URL（使用缓存）
-        url, metadata = await service.get_image_url(
+        url, metadata = await handler.handle_get_image_url(
             image_key=image_key,
             force_refresh=refresh
         )
@@ -184,10 +184,10 @@ async def get_image_status(
     Returns:
         StandardResponse: 图片状态信息
     """
-    service = await get_image_url_service()
+    handler = ImageProxyHandler(db)
 
     try:
-        status = await service.check_url_status(image_key)
+        status = await handler.handle_check_url_status(image_key)
 
         return StandardResponse(
             status="success",
@@ -227,10 +227,10 @@ async def refresh_image_url(
     Returns:
         StandardResponse: 刷新结果
     """
-    service = await get_image_url_service()
+    handler = ImageProxyHandler(db)
 
     try:
-        new_url, metadata = await service.refresh_url(image_key)
+        new_url, metadata = await handler.handle_refresh_url(image_key)
 
         return StandardResponse(
             status="success",
@@ -280,7 +280,7 @@ async def batch_get_image_urls(
     Returns:
         StandardResponse: 批量获取结果
     """
-    service = await get_image_url_service()
+    handler = ImageProxyHandler(db)
 
     # 解析图片键列表
     keys_list = [key.strip() for key in image_keys.split(',') if key.strip()]
@@ -293,7 +293,7 @@ async def batch_get_image_urls(
         )
 
     try:
-        results = await service.get_multiple_urls(
+        results = await handler.handle_get_multiple_urls(
             image_keys=keys_list,
             force_refresh=refresh,
             use_cache=use_cache,
@@ -344,10 +344,10 @@ async def get_proxy_stats(
     Returns:
         StandardResponse: 统计信息
     """
-    service = await get_image_url_service()
+    handler = ImageProxyHandler(db)
 
     try:
-        stats = await service.get_performance_stats()
+        stats = await handler.handle_get_performance_stats()
 
         return StandardResponse(
             status="success",
@@ -382,10 +382,10 @@ async def cleanup_expired_cache(
     Returns:
         StandardResponse: 清理结果
     """
-    service = await get_image_url_service()
+    handler = ImageProxyHandler(db)
 
     try:
-        cleaned = await service.cleanup_expired_cache()
+        cleaned = await handler.handle_cleanup_expired_cache()
 
         return StandardResponse(
             status="success",
@@ -424,7 +424,7 @@ async def preload_image_urls(
     Returns:
         StandardResponse: 预加载结果
     """
-    service = await get_image_url_service()
+    handler = ImageProxyHandler(db)
 
     # 解析图片键列表
     keys_list = [key.strip() for key in image_keys.split(',') if key.strip()]
@@ -437,7 +437,7 @@ async def preload_image_urls(
         )
 
     try:
-        results = await service.preload_urls(
+        results = await handler.handle_preload_urls(
             image_keys=keys_list,
             max_concurrent=max_concurrent
         )
