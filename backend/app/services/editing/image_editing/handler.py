@@ -59,7 +59,7 @@ class ImageEditingHandler:
             )
 
             # 提交到Celery队列
-            from app.services.tasks.image_editing_tasks import mineru_task
+            from app.tasks.image_editing_tasks import mineru_task
             celery_task = mineru_task.apply_async(
                 kwargs={
                     "task_id": task_id,
@@ -135,7 +135,7 @@ class ImageEditingHandler:
             )
 
             # 提交到Celery队列
-            from app.services.tasks.image_editing_tasks import hybrid_ocr_task
+            from app.tasks.image_editing_tasks import hybrid_ocr_task
             celery_task = hybrid_ocr_task.apply_async(
                 kwargs={
                     "task_id": task_id,
@@ -269,7 +269,7 @@ class ImageEditingHandler:
             # 根据OCR引擎选择提交不同的任务
             if ocr_engine == "mineru":
                 # 使用MinerU任务
-                from app.services.tasks.image_editing_tasks import mineru_task
+                from app.tasks.image_editing_tasks import mineru_task
                 celery_task = mineru_task.apply_async(
                     kwargs={
                         "task_id": task_id,
@@ -287,7 +287,7 @@ class ImageEditingHandler:
                 message = "MinerU识别+文字去除任务已创建，正在处理中"
             else:
                 # 使用混合OCR任务（默认）
-                from app.services.tasks.image_editing_tasks import full_editing_task
+                from app.tasks.image_editing_tasks import full_editing_task
                 celery_task = full_editing_task.apply_async(
                     kwargs={
                         "task_id": task_id,

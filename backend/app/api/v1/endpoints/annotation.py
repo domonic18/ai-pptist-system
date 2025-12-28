@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.services.annotation.annotation.handler import AnnotationHandler
+from app.services.annotation.handler import AnnotationHandler
 from app.schemas.annotation import (
     SingleAnnotationRequest,
     BatchAnnotationRequest

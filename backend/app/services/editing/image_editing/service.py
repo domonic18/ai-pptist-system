@@ -10,7 +10,7 @@ import json
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.image_editing import ImageEditingRepository
-from app.services.ocr.hybrid_ocr_fusion import HybridOCRFusion
+from app.core.ocr.hybrid_ocr_fusion import HybridOCRFusion
 from app.services.editing.text_removal.service import TextRemovalService
 from app.services.editing.multimodal_fusion.service import MinerUMultimodalFusionService
 from app.models.image_editing_task import EditingTaskStatus

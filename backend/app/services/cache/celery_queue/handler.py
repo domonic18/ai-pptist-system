@@ -7,7 +7,7 @@ from typing import Dict, Any, List
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.tasks import (
+from app.tasks import (
     get_active_tasks,
     get_task_result,
     get_queue_stats,

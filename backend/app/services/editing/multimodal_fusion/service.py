@@ -9,8 +9,8 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config.config import settings
-from app.services.ocr.mineru_adapter import MinerUAdapter, convert_bbox_from_normalized
-from app.services.ocr.multimodal_ocr_engine import MultimodalOCREngine
+from app.core.ocr.mineru_adapter import MinerUAdapter, convert_bbox_from_normalized
+from app.core.ocr.multimodal_ocr_engine import MultimodalOCREngine
 from app.schemas.image_editing import (
     HybridOCRResult,
     HybridTextRegion,

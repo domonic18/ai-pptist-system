@@ -6,7 +6,7 @@ URL缓存刷新处理器
 from typing import Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.tasks import (
+from app.tasks import (
     refresh_url_cache,
     batch_refresh_url_cache,
     schedule_periodic_refresh,

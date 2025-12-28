@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.generation.banana_generation.slide_generator import BananaSlideGenerator
 from app.services.generation.banana_generation.task_manager import BananaTaskManager
-from app.services.tasks.banana_generation_tasks import (
+from app.tasks.banana_generation_tasks import (
     generate_batch_slides_task,
     generate_single_slide_task,
 )

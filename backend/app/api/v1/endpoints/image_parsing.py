@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.services.parsing.image_parsing.handler import ImageParsingHandler
+from app.services.image.parsing.handler import ImageParsingHandler
 from app.schemas.image_parsing import ParseRequest
 from app.schemas.common import StandardResponse
 from app.core.log_utils import get_logger
