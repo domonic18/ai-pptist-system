@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.image_editing import ImageEditingRepository
 from app.services.ocr.hybrid_ocr_fusion import HybridOCRFusion
-from app.services.editing.text_removal_service import TextRemovalService
-from app.services.editing.mineru_multimodal_fusion_service import MinerUMultimodalFusionService
+from app.services.editing.text_removal.service import TextRemovalService
+from app.services.editing.multimodal_fusion.service import MinerUMultimodalFusionService
 from app.models.image_editing_task import EditingTaskStatus
 from app.schemas.image_editing import (
     HybridOCRResult,

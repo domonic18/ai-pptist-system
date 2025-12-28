@@ -7,7 +7,7 @@ from celery import group, chain
 from celery.result import AsyncResult
 
 from .celery_app import celery_app
-from app.services.cache.image_url_service import ImageURLService
+from app.services.cache.url.service import ImageURLService
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +166,7 @@ def cleanup_expired_cache() -> dict:  # type: ignore
     """
     try:
         import asyncio
-        from app.services.cache.url_cache import ImageURLCache
+        from app.services.cache.url.cache import ImageURLCache
 
         # 在Celery中运行异步函数
         loop = asyncio.new_event_loop()
@@ -212,7 +212,7 @@ def pre_refresh_active_urls() -> dict:  # type: ignore
     主动刷新即将过期的URL，提高缓存命中率
     """
     try:
-        from app.services.cache.url_cache import ImageURLCache
+        from app.services.cache.url.cache import ImageURLCache
 
         cache = ImageURLCache()
         start_time = datetime.utcnow()

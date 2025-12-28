@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import UploadFile, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.image.upload_service import ImageUploadService
+from app.services.image.upload.service import ImageUploadService
 from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)

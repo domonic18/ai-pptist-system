@@ -8,7 +8,7 @@
 """
 
 from typing import Dict, Any
-from app.services.annotation.annotation_service import AnnotationService
+from app.services.annotation.annotation.service import AnnotationService
 from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)

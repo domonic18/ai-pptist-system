@@ -7,7 +7,7 @@ from typing import AsyncGenerator
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.generation.outline_stream_service import OutlineStreamService
+from app.services.generation.outline_stream.service import OutlineStreamService
 from app.repositories.ai_model import AIModelRepository
 from app.core.log_utils import get_logger
 from app.schemas.generation_outline import OutlineGenerationRequest

@@ -171,7 +171,7 @@ class ManagementService:
             if image.cos_key:
                 # 使用带缓存的图片URL服务，优先从Redis缓存获取
                 try:
-                    from app.services.cache.image_url_service import get_image_url_service
+                    from app.services.cache.url.service import get_image_url_service
 
                     service = await get_image_url_service()
                     url, metadata = await service.get_image_url(

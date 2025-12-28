@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.image.search_service import ImageSearchService
+from app.services.image.search.service import ImageSearchService
 from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)

@@ -7,7 +7,7 @@ from typing import Dict, Any
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.image.image_generation_service import ImageGenerationService
+from app.services.image.generation.service import ImageGenerationService
 from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)

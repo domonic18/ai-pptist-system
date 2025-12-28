@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Tuple
 import time
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.cache.image_url_service import get_image_url_service
+from app.services.cache.url.service import get_image_url_service
 from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)

@@ -10,7 +10,7 @@ from datetime import datetime
 import uuid
 
 from app.repositories.image_editing import ImageEditingRepository
-from app.services.editing.image_editing_service import ImageEditingService
+from app.services.editing.image_editing.service import ImageEditingService
 from app.schemas.image_editing import (
     ParseAndRemoveRequest,
     HybridOCRParseRequest,

@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.layout.layout_optimization_service import LayoutOptimizationService
+from app.services.layout.optimization.service import LayoutOptimizationService
 from app.schemas.layout_optimization import (
     LayoutOptimizationRequest,
     LayoutOptimizationResponseData

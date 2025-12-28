@@ -12,8 +12,8 @@ from typing import Dict, Any
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.annotation.annotation_service import AnnotationService
-from app.services.annotation.single_annotation_service import SingleAnnotationService
+from app.services.annotation.annotation.service import AnnotationService
+from app.services.annotation.annotation.single_service import SingleAnnotationService
 from app.schemas.annotation import (
     SingleAnnotationRequest,
     BatchAnnotationRequest

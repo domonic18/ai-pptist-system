@@ -194,7 +194,7 @@ def get_cache_refresh_stats() -> Dict[str, Any]:
         缓存刷新统计
     """
     from app.utils.imageErrorHandler import get_error_stats
-    from app.services.cache.url_cache import ImageURLCache
+    from app.services.cache.url.cache import ImageURLCache
 
     try:
         # 获取错误统计

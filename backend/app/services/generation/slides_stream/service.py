@@ -13,10 +13,10 @@ from app.core.config import settings
 from app.prompts import get_prompt_manager
 from app.core.ai.factory import AIProviderFactory
 from app.core.ai.models import ModelCapability
-from app.services.generation.stream.common_utils import StreamEventGenerator, StreamJsonParser
+from app.services.generation.banana_generation.stream.common_utils import StreamEventGenerator, StreamJsonParser
 from app.utils import ResponseParser
 from app.prompts import PromptHelper
-from app.services.generation.stream.mock_slides import mock_slides_service
+from app.services.generation.banana_generation.stream.mock_slides import mock_slides_service
 
 logger = get_logger(__name__)
 

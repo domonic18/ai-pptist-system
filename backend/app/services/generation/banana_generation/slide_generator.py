@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.ai.factory import AIProviderFactory
 from app.core.ai.models import ModelCapability
-from app.services.generation.banana_task_manager import BananaTaskManager
-from app.services.generation.banana_prompt_service import BananaPromptService
+from app.services.generation.banana_generation.task_manager import BananaTaskManager
+from app.services.generation.banana_generation.prompt_service import BananaPromptService
 from app.repositories.ai_model import AIModelRepository
 from app.core.config import settings
 from app.core.log_utils import get_logger
@@ -251,7 +251,7 @@ class BananaSlideGenerator:
                 # 如果是 Key，或者是不带签名的 COS URL，尝试生成预签名 URL
                 if not is_http or (is_cos_url and not has_signature):
                     try:
-                        from app.services.cache.image_url_service import get_image_url_service
+                        from app.services.cache.url.service import get_image_url_service
                         url_service = await get_image_url_service()
                         
                         # 提取 Key

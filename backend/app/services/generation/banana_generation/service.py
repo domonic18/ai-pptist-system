@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.generation.banana_slide_generator import BananaSlideGenerator
-from app.services.generation.banana_task_manager import BananaTaskManager
+from app.services.generation.banana_generation.slide_generator import BananaSlideGenerator
+from app.services.generation.banana_generation.task_manager import BananaTaskManager
 from app.services.tasks.banana_generation_tasks import (
     generate_batch_slides_task,
     generate_single_slide_task,
@@ -473,7 +473,7 @@ class BananaGenerationService:
         Returns:
             Dict: 模板列表
         """
-        from app.services.cache.image_url_service import get_image_url_service
+        from app.services.cache.url.service import get_image_url_service
         url_service = await get_image_url_service()
         
         templates = await self.repo.get_templates(template_type=template_type, aspect_ratio=aspect_ratio)

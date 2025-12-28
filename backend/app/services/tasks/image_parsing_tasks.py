@@ -80,7 +80,7 @@ def _execute_image_parsing(
     """
     from app.core.cache.redis import get_redis
     from app.db.database import AsyncSessionLocal
-    from app.services.parsing.image_parsing_service import ImageParsingService
+    from app.services.parsing.image_parsing.service import ImageParsingService
 
     with AsyncRunner() as runner:
         async def do_parsing():

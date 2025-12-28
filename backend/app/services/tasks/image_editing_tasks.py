@@ -78,7 +78,7 @@ def _execute_hybrid_ocr(
     将异步操作封装在 AsyncRunner 中统一管理
     """
     from app.db.database import AsyncSessionLocal
-    from app.services.editing.image_editing_service import ImageEditingService
+    from app.services.editing.image_editing.service import ImageEditingService
 
     with AsyncRunner() as runner:
         async def do_ocr():
@@ -243,7 +243,7 @@ def _execute_full_editing(
     2. 文字去除
     """
     from app.db.database import AsyncSessionLocal
-    from app.services.editing.image_editing_service import ImageEditingService
+    from app.services.editing.image_editing.service import ImageEditingService
 
     with AsyncRunner() as runner:
         async def do_editing():
@@ -384,7 +384,7 @@ def _execute_mineru_recognition(
     2. 可选：文字去除
     """
     from app.db.database import AsyncSessionLocal
-    from app.services.editing.image_editing_service import ImageEditingService
+    from app.services.editing.image_editing.service import ImageEditingService
 
     with AsyncRunner() as runner:
         async def do_recognition():

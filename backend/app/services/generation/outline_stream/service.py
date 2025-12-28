@@ -10,12 +10,12 @@ from typing import AsyncGenerator, Dict, Any, Optional
 from app.core.log_utils import get_logger
 from app.core.config import settings
 from app.prompts import get_prompt_manager
-from app.services.generation.stream.outline_helper import OutlineHelper
+from app.services.generation.banana_generation.stream.outline_helper import OutlineHelper
 from app.core.ai.factory import AIProviderFactory
 from app.core.ai.models import ModelCapability
-from app.services.generation.stream.common_utils import StreamEventGenerator
+from app.services.generation.banana_generation.stream.common_utils import StreamEventGenerator
 from app.prompts import PromptHelper
-from app.services.generation.stream.mock_outline import mock_outline_service
+from app.services.generation.banana_generation.stream.mock_outline import mock_outline_service
 from app.repositories.ai_model import AIModelRepository
 
 logger = get_logger(__name__)

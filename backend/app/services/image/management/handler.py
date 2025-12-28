@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.image.management_service import ManagementService
+from app.services.image.management.service import ManagementService
 from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)
@@ -232,7 +232,7 @@ class ManagementHandler:
             # 如果有COS存储键，使用缓存服务获取URL
             if image_detail.get("cos_key"):
                 try:
-                    from app.services.cache.image_url_service import get_image_url_service
+                    from app.services.cache.url.service import get_image_url_service
 
                     service = await get_image_url_service()
                     url, metadata = await service.get_image_url(

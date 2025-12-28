@@ -89,7 +89,7 @@ def _execute_slide_generation(
     """
     from app.core.cache.redis import get_redis
     from app.db.database import AsyncSessionLocal
-    from app.services.generation.banana_slide_generator import BananaSlideGenerator
+    from app.services.generation.banana_generation.slide_generator import BananaSlideGenerator
 
     with AsyncRunner() as runner:
         async def do_generation():
@@ -193,7 +193,7 @@ def _mark_slide_as_failed(task_id: str, slide_index: int, error: Exception):
     """在 Redis 中标记幻灯片生成失败"""
     try:
         from app.core.cache.redis import get_redis
-        from app.services.generation.banana_task_manager import BananaTaskManager
+        from app.services.generation.banana_generation.task_manager import BananaTaskManager
         from app.utils.async_utils import run_async
 
         async def update_failed_status():

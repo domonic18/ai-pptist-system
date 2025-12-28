@@ -7,7 +7,7 @@ from typing import AsyncGenerator
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.generation.slides_stream_service import SlidesStreamService
+from app.services.generation.slides_stream.service import SlidesStreamService
 from app.core.log_utils import get_logger
 from app.schemas.generation_slides import SlidesGenerationRequest
 from app.repositories.ai_model import AIModelRepository

@@ -14,7 +14,7 @@ from app.repositories.image import ImageRepository
 from app.schemas.image_manager import ImageCreate, ImageGenerationAndStoreRequest
 from app.core.storage import get_storage_service
 from app.core.config import settings
-from app.services.image.image_generation_service import ImageGenerationService
+from app.services.image.generation.service import ImageGenerationService
 from app.core.log_utils import get_logger
 from app.utils.id_utils import generate_short_id
 

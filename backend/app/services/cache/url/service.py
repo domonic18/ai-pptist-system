@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from app.core.log_utils import get_logger
 from app.core.storage import COSStorage
 from app.core.config.cos_config import get_cos_config
-from .url_cache import ImageURLCache, URLCacheEntry, get_url_cache
+from .cache import ImageURLCache, URLCacheEntry, get_url_cache
 
 logger = get_logger(__name__)
 

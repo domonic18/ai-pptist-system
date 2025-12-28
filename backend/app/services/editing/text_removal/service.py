@@ -15,7 +15,7 @@ from app.core.ai.factory import AIProviderFactory
 from app.core.ai.models import ModelCapability
 from app.prompts.utils import load_prompt_template_config
 from app.repositories.ai_model import AIModelRepository
-from app.services.ai_model.management_service import ManagementService
+from app.services.ai_model.management.service import ManagementService
 
 logger = get_logger(__name__)
 

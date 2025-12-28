@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.generation.banana_generation_service import BananaGenerationService
+from app.services.generation.banana_generation.service import BananaGenerationService
 from app.schemas.banana_generation import (
     SplitOutlineRequest,
     GenerateBatchSlidesRequest,

@@ -10,7 +10,7 @@ from datetime import datetime
 import uuid
 
 from app.repositories.image_parsing import ImageParsingRepository
-from app.services.parsing.image_parsing_service import ImageParsingService
+from app.services.parsing.image_parsing.service import ImageParsingService
 from app.schemas.image_parsing import ParseRequest
 from app.core.log_utils import get_logger
 

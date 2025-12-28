@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.log_utils import get_logger
 from app.core.storage import get_storage_service, download_image_by_key
-from app.services.ai_model.management_service import ManagementService
+from app.services.ai_model.management.service import ManagementService
 from app.core.config.config import settings
 from app.core.ai.factory import AIProviderFactory
 from app.core.ai.models import ModelCapability

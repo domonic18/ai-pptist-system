@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.ai_model.management_service import ManagementService
+from app.services.ai_model.management.service import ManagementService
 from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)
