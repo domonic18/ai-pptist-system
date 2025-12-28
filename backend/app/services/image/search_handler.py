@@ -61,7 +61,7 @@ class ImageSearchHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"搜索图片失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_search_by_tags(
         self,
@@ -103,7 +103,7 @@ class ImageSearchHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"按标签搜索失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_get_user_tags(
         self,
@@ -141,7 +141,7 @@ class ImageSearchHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"获取用户标签失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_get_search_statistics(
         self,

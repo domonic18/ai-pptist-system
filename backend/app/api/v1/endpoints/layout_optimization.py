@@ -4,7 +4,7 @@
 """
 
 from typing import Any, Dict
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
@@ -14,9 +14,6 @@ from app.schemas.layout_optimization import (
 )
 from app.schemas.common import StandardResponse
 from app.services.layout.layout_optimization_handler import LayoutOptimizationHandler
-from app.core.log_utils import get_logger
-
-logger = get_logger(__name__)
 
 
 def _remove_none_values(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -85,47 +82,25 @@ async def optimize_slide_layout(
             - error_code: 错误码（可选）
             - error_details: 错误详情（可选）
     """
-    try:
-        # 调用Handler处理业务
-        handler = LayoutOptimizationHandler(db)
-        result = await handler.handle_optimize_layout(request)
+    # 调用Handler处理业务
+    handler = LayoutOptimizationHandler(db)
+    result = await handler.handle_optimize_layout(request)
 
-        # 手动序列化数据，排除None值以避免前端处理问题
-        # 将Pydantic对象转换为字典时使用exclude_none=True
-        # 注意：关键字段（如viewBox）已在HTML解析器中确保有值，这里只清理非必要的None值
-        result_dict = result.model_dump(exclude_none=True)
-        
-        # 递归清理elements数组中每个元素的None值
-        if "elements" in result_dict and isinstance(result_dict["elements"], list):
-            result_dict["elements"] = [
-                _remove_none_values(el) if isinstance(el, dict) else el
-                for el in result_dict["elements"]
-            ]
+    # 手动序列化数据，排除None值以避免前端处理问题
+    # 将Pydantic对象转换为字典时使用exclude_none=True
+    # 注意：关键字段（如viewBox）已在HTML解析器中确保有值，这里只清理非必要的None值
+    result_dict = result.model_dump(exclude_none=True)
 
-        # 返回标准响应
-        return StandardResponse(
-            status="success",
-            message="布局优化完成",
-            data=result_dict
-        )
+    # 递归清理elements数组中每个元素的None值
+    if "elements" in result_dict and isinstance(result_dict["elements"], list):
+        result_dict["elements"] = [
+            _remove_none_values(el) if isinstance(el, dict) else el
+            for el in result_dict["elements"]
+        ]
 
-    except HTTPException:
-        # FastAPI会自动处理HTTPException
-        raise
-
-    except Exception as e:
-        # 捕获未预期的异常
-        logger.error(
-            "布局优化端点异常",
-            operation="optimize_slide_layout_endpoint",
-            slide_id=request.slide_id if request else None,
-            error=str(e),
-            error_type=type(e).__name__
-        )
-
-        return StandardResponse(
-            status="error",
-            message="布局优化失败",
-            error_code="LAYOUT_OPTIMIZATION_ERROR",
-            error_details={"error": str(e)}
-        )
+    # 返回标准响应
+    return StandardResponse(
+        status="success",
+        message="布局优化完成",
+        data=result_dict
+    )

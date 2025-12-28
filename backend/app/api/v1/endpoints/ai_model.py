@@ -4,7 +4,7 @@ AI模型管理API端点
 """
 
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
@@ -42,43 +42,31 @@ async def list_ai_models(
     Returns:
         StandardResponse: 包含模型列表的标准化响应
     """
-    try:
-        handler = ManagementHandler(db)
-        result = await handler.handle_list_models(
-            enabled_only=enabled_only,
-            capability=capability
-        )
+    handler = ManagementHandler(db)
+    result = await handler.handle_list_models(
+        enabled_only=enabled_only,
+        capability=capability
+    )
 
-        # 转换为响应模型
-        model_responses = [AIModelResponse.model_validate(model) for model in result["items"]]
+    # 转换为响应模型
+    model_responses = [AIModelResponse.model_validate(model) for model in result["items"]]
 
-        logger.info(
-            "成功获取AI模型列表",
-            operation="list_models_success",
-            total_models=result["total"],
-            enabled_only=enabled_only,
-            capability=capability
-        )
+    logger.info(
+        "成功获取AI模型列表",
+        operation="list_models_success",
+        total_models=result["total"],
+        enabled_only=enabled_only,
+        capability=capability
+    )
 
-        return StandardResponse(
-            status="success",
-            message=f"成功获取 {len(model_responses)} 个AI模型",
-            data={
-                "items": [model.model_dump() for model in model_responses],
-                "total": result["total"]
-            }
-        )
-
-    except Exception as e:
-        logger.error(
-            "获取AI模型列表失败",
-            operation="list_models_failed",
-            exception=e
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取模型列表失败: {str(e)}"
-        ) from e
+    return StandardResponse(
+        status="success",
+        message=f"成功获取 {len(model_responses)} 个AI模型",
+        data={
+            "items": [model.model_dump() for model in model_responses],
+            "total": result["total"]
+        }
+    )
 
 
 @router.get(
@@ -101,42 +89,22 @@ async def get_ai_model(
     Returns:
         StandardResponse: 包含模型详情的标准化响应
     """
-    try:
-        handler = ManagementHandler(db)
-        model = await handler.handle_get_model_for_edit(model_id)
+    handler = ManagementHandler(db)
+    model = await handler.handle_get_model_for_edit(model_id)
 
-        if not model:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="模型不存在"
-            )
+    logger.info(
+        "成功获取AI模型详情",
+        operation="get_model_success",
+        model_id=model_id,
+        model_name=model["name"]
+    )
 
-        logger.info(
-            "成功获取AI模型详情",
-            operation="get_model_success",
-            model_id=model_id,
-            model_name=model["name"]
-        )
+    return StandardResponse(
+        status="success",
+        message="成功获取AI模型详情",
+        data=model
+    )
 
-        return StandardResponse(
-            status="success",
-            message="成功获取AI模型详情",
-            data=model
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            "获取AI模型详情失败",
-            operation="get_model_failed",
-            exception=e,
-            model_id=model_id
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取模型详情失败: {str(e)}"
-        ) from e
 
 @router.post(
     "/models",
@@ -158,45 +126,21 @@ async def create_ai_model(
     Returns:
         StandardResponse: 创建结果的标准化响应
     """
-    try:
-        handler = ManagementHandler(db)
-        new_model = await handler.handle_create_model(model_data.model_dump())
+    handler = ManagementHandler(db)
+    new_model = await handler.handle_create_model(model_data.model_dump())
 
-        logger.info(
-            "成功创建AI模型",
-            operation="create_model_success",
-            model_id=new_model["id"],
-            model_name=new_model["name"]
-        )
+    logger.info(
+        "成功创建AI模型",
+        operation="create_model_success",
+        model_id=new_model["id"],
+        model_name=new_model["name"]
+    )
 
-        return StandardResponse(
-            status="success",
-            message="AI模型创建成功",
-            data=AIModelResponse.model_validate(new_model).model_dump()
-        )
-
-    except ValueError as e:
-        logger.warning(
-            "创建AI模型参数错误",
-            operation="create_model_validation_failed",
-            exception=e,
-            model_name=model_data.name
-        )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        ) from e
-    except Exception as e:
-        logger.error(
-            "创建AI模型失败",
-            operation="create_model_failed",
-            exception=e,
-            model_name=model_data.name
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"创建模型失败: {str(e)}"
-        ) from e
+    return StandardResponse(
+        status="success",
+        message="AI模型创建成功",
+        data=AIModelResponse.model_validate(new_model).model_dump()
+    )
 
 
 @router.put(
@@ -221,42 +165,21 @@ async def update_ai_model(
     Returns:
         StandardResponse: 更新结果的标准化响应
     """
-    try:
-        handler = ManagementHandler(db)
-        updated_model = await handler.handle_update_model(model_id, update_data.model_dump())
+    handler = ManagementHandler(db)
+    updated_model = await handler.handle_update_model(model_id, update_data.model_dump())
 
-        if not updated_model:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="模型不存在"
-            )
+    logger.info(
+        "成功更新AI模型",
+        operation="update_model_success",
+        model_id=model_id,
+        model_name=updated_model["name"]
+    )
 
-        logger.info(
-            "成功更新AI模型",
-            operation="update_model_success",
-            model_id=model_id,
-            model_name=updated_model["name"]
-        )
-
-        return StandardResponse(
-            status="success",
-            message="AI模型更新成功",
-            data=AIModelResponse.model_validate(updated_model).model_dump()
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            "更新AI模型失败",
-            operation="update_model_failed",
-            exception=e,
-            model_id=model_id
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"更新模型失败: {str(e)}"
-        ) from e
+    return StandardResponse(
+        status="success",
+        message="AI模型更新成功",
+        data=AIModelResponse.model_validate(updated_model).model_dump()
+    )
 
 
 @router.delete(
@@ -279,39 +202,17 @@ async def delete_ai_model(
     Returns:
         StandardResponse: 删除结果的标准化响应
     """
-    try:
-        handler = ManagementHandler(db)
-        success = await handler.handle_delete_model(model_id)
+    handler = ManagementHandler(db)
+    await handler.handle_delete_model(model_id)
 
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="模型不存在"
-            )
+    logger.info(
+        "成功删除AI模型",
+        operation="delete_model_success",
+        model_id=model_id
+    )
 
-        logger.info(
-            "成功删除AI模型",
-            operation="delete_model_success",
-            model_id=model_id
-        )
-
-        return StandardResponse(
-            status="success",
-            message="AI模型删除成功",
-            data={"model_id": model_id}
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            "删除AI模型失败",
-            operation="delete_model_failed",
-            exception=e,
-            model_id=model_id
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"删除模型失败: {str(e)}"
-        ) from e
-
+    return StandardResponse(
+        status="success",
+        message="AI模型删除成功",
+        data={"model_id": model_id}
+    )

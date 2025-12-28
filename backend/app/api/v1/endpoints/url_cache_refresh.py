@@ -3,7 +3,7 @@ URL缓存刷新API端点
 处理图片URL的刷新、批量刷新和定期刷新
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
@@ -41,30 +41,19 @@ async def refresh_single_url(
     Returns:
         StandardResponse: 包含任务ID的响应
     """
-    try:
-        handler = UrlRefreshHandler(db)
-        result = await handler.handle_refresh_single_url(request)
+    handler = UrlRefreshHandler(db)
+    result = await handler.handle_refresh_single_url(request)
 
-        logger.info(
-            "URL刷新任务提交成功",
-            extra={'task_id': result['task_id'], 'image_key': request.image_key}
-        )
+    logger.info(
+        "URL刷新任务提交成功",
+        extra={'task_id': result['task_id'], 'image_key': request.image_key}
+    )
 
-        return StandardResponse(
-            status="success",
-            message="URL刷新任务已提交",
-            data=result
-        )
-
-    except Exception as e:
-        logger.error(
-            "URL刷新任务提交失败",
-            extra={'image_key': request.image_key, 'error': str(e)}
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"URL刷新失败: {str(e)}"
-        ) from e
+    return StandardResponse(
+        status="success",
+        message="URL刷新任务已提交",
+        data=result
+    )
 
 
 @router.post(
@@ -87,30 +76,19 @@ async def batch_refresh_urls(
     Returns:
         StandardResponse: 包含任务ID的响应
     """
-    try:
-        handler = UrlRefreshHandler(db)
-        result = await handler.handle_batch_refresh_urls(request)
+    handler = UrlRefreshHandler(db)
+    result = await handler.handle_batch_refresh_urls(request)
 
-        logger.info(
-            "批量URL刷新任务提交成功",
-            extra={'task_id': result['task_id'], 'count': result['count']}
-        )
+    logger.info(
+        "批量URL刷新任务提交成功",
+        extra={'task_id': result['task_id'], 'count': result['count']}
+    )
 
-        return StandardResponse(
-            status="success",
-            message=f"批量刷新任务已提交: {len(request.image_keys)} 项",
-            data=result
-        )
-
-    except Exception as e:
-        logger.error(
-            "批量URL刷新任务提交失败",
-            extra={'count': len(request.image_keys), 'error': str(e)}
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"批量刷新失败: {str(e)}"
-        ) from e
+    return StandardResponse(
+        status="success",
+        message=f"批量刷新任务已提交: {len(request.image_keys)} 项",
+        data=result
+    )
 
 
 @router.post(
@@ -133,31 +111,20 @@ async def schedule_periodic(
     Returns:
         StandardResponse: 包含任务ID的响应
     """
-    try:
-        handler = UrlRefreshHandler(db)
-        result = await handler.handle_schedule_periodic_refresh(request)
+    handler = UrlRefreshHandler(db)
+    result = await handler.handle_schedule_periodic_refresh(request)
 
-        logger.info(
-            "定期刷新任务调度成功",
-            extra={
-                'task_id': result['task_id'],
-                'image_key': request.image_key,
-                'interval': request.refresh_interval
-            }
-        )
+    logger.info(
+        "定期刷新任务调度成功",
+        extra={
+            'task_id': result['task_id'],
+            'image_key': request.image_key,
+            'interval': request.refresh_interval
+        }
+    )
 
-        return StandardResponse(
-            status="success",
-            message=f"任务已调度: {request.image_key}, 间隔: {request.refresh_interval}s",
-            data=result
-        )
-
-    except Exception as e:
-        logger.error(
-            "定期刷新任务调度失败",
-            extra={'image_key': request.image_key, 'error': str(e)}
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"调度刷新任务失败: {str(e)}"
-        ) from e
+    return StandardResponse(
+        status="success",
+        message=f"任务已调度: {request.image_key}, 间隔: {request.refresh_interval}s",
+        data=result
+    )

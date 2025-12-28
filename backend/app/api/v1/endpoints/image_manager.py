@@ -12,9 +12,6 @@ from app.db.database import get_db
 from app.services.image.management_handler import ManagementHandler
 from app.services.image.search_handler import ImageSearchHandler
 from app.schemas.common import StandardResponse
-from app.core.log_utils import get_logger
-
-logger = get_logger(__name__)
 
 router = APIRouter(tags=["图片管理"])
 
@@ -241,14 +238,11 @@ async def batch_delete_images(
     results = []
 
     for image_id in image_ids:
-        try:
-            success = await handler.handle_delete_image(
-                image_id=image_id,
-                user_id=user_id
-            )
-            results.append({"image_id": image_id, "success": success})
-        except Exception as e:
-            results.append({"image_id": image_id, "success": False, "error": str(e)})
+        success = await handler.handle_delete_image(
+            image_id=image_id,
+            user_id=user_id
+        )
+        results.append({"image_id": image_id, "success": success})
 
     # 统计成功和失败的数量
     successful = sum(1 for r in results if r["success"])

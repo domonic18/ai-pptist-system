@@ -65,7 +65,7 @@ class BananaGenerationHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"大纲拆分失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_generate_batch_slides(
         self,
@@ -116,8 +116,7 @@ class BananaGenerationHandler:
             )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(e)
-            )
+                detail=str(e)            )
         except Exception as e:
             logger.error(
                 "批量生成PPT失败",
@@ -130,7 +129,7 @@ class BananaGenerationHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"批量生成PPT失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_get_generation_status(
         self,
@@ -159,8 +158,7 @@ class BananaGenerationHandler:
             )
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=str(e)
-            )
+                detail=str(e)            )
         except Exception as e:
             logger.error(
                 "查询生成状态失败",
@@ -169,7 +167,7 @@ class BananaGenerationHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"查询生成状态失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_stop_generation(
         self,
@@ -196,8 +194,7 @@ class BananaGenerationHandler:
             )
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=str(e)
-            )
+                detail=str(e)            )
         except Exception as e:
             logger.error(
                 "停止生成失败",
@@ -206,7 +203,7 @@ class BananaGenerationHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"停止生成失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_regenerate_slide(
         self,
@@ -251,8 +248,7 @@ class BananaGenerationHandler:
             )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(e)
-            )
+                detail=str(e)            )
         except Exception as e:
             logger.error(
                 "重新生成幻灯片失败",
@@ -265,7 +261,7 @@ class BananaGenerationHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"重新生成幻灯片失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_get_templates(
         self,

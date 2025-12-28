@@ -8,9 +8,8 @@
 - 返回StandardResponse
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Dict, Any
 
 from app.db.database import get_db
 from app.services.annotation.annotation_handler import AnnotationHandler
@@ -20,7 +19,6 @@ from app.schemas.annotation import (
 )
 from app.schemas.common import StandardResponse
 from app.core.log_utils import get_logger
-from app.core.log_messages import log_messages
 
 logger = get_logger(__name__)
 
@@ -52,39 +50,25 @@ async def annotate_single_slide(
     Returns:
         StandardResponse: 包含标注结果的响应
     """
-    try:
-        # 验证请求
-        logger.info(
-            "收到单张幻灯片标注请求",
-            extra={"slide_id": request.slide.get("slide_id")}
-        )
+    # 验证请求
+    logger.info(
+        "收到单张幻灯片标注请求",
+        extra={"slide_id": request.slide.get("slide_id")}
+    )
 
-        handler = AnnotationHandler(db)
-        result = await handler.handle_annotate_single_slide(request)
+    handler = AnnotationHandler(db)
+    result = await handler.handle_annotate_single_slide(request)
 
-        logger.info(
-            "单张幻灯片标注成功",
-            extra={"slide_id": request.slide.get("slide_id")}
-        )
+    logger.info(
+        "单张幻灯片标注成功",
+        extra={"slide_id": request.slide.get("slide_id")}
+    )
 
-        return StandardResponse(
-            status="success",
-            message="标注完成",
-            data=result
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            log_messages.OPERATION_FAILED,
-            operation_name="单张幻灯片标注",
-            exception=e
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"标注失败: {str(e)}"
-        )
+    return StandardResponse(
+        status="success",
+        message="标注完成",
+        data=result
+    )
 
 
 @router.post(
@@ -112,36 +96,22 @@ async def batch_annotate_slides(
     Returns:
         StandardResponse: 包含任务ID的响应
     """
-    try:
-        # 从认证中获取用户ID（暂时使用固定值）
-        user_id = "demo_001"
+    # 从认证中获取用户ID（暂时使用固定值）
+    user_id = "demo_001"
 
-        logger.info(
-            "收到批量标注请求",
-            extra={
-                "user_id": user_id,
-                "slide_count": len(request.slides)
-            }
-        )
+    logger.info(
+        "收到批量标注请求",
+        extra={
+            "user_id": user_id,
+            "slide_count": len(request.slides)
+        }
+    )
 
-        handler = AnnotationHandler(db)
-        result = await handler.handle_batch_annotation_start(request, user_id)
+    handler = AnnotationHandler(db)
+    result = await handler.handle_batch_annotation_start(request, user_id)
 
-        return StandardResponse(
-            status="success",
-            message="批量标注任务已启动",
-            data=result
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            log_messages.OPERATION_FAILED,
-            operation_name="批量标注启动",
-            exception=e
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"启动批量标注失败: {str(e)}"
-        )
+    return StandardResponse(
+        status="success",
+        message="批量标注任务已启动",
+        data=result
+    )

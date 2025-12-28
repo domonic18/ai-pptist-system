@@ -40,9 +40,7 @@ class ImageGenerationHandler:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="提示词不能为空"
-                )
-
-            # 提取参数
+                )            # 提取参数
             ai_model_id = request_data.get("ai_model_id", "")
             width = request_data.get("width", 1024)
             height = request_data.get("height", 1024)

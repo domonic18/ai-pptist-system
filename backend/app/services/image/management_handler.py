@@ -59,7 +59,7 @@ class ManagementHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"获取图片列表失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_get_image_detail(
         self,

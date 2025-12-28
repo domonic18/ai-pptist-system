@@ -3,7 +3,6 @@
 提供图片代理访问服务，支持代理模式和重定向模式
 """
 
-import asyncio
 import time
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, Request, Response
@@ -53,60 +52,41 @@ async def proxy_image(
     start_time = time.time()
     handler = ImageProxyHandler(db)
 
-    try:
-        # 获取图片URL（使用缓存）
-        url, metadata = await handler.handle_get_image_url(
-            image_key=image_key,
-            force_refresh=refresh
-        )
+    # 获取图片URL（使用缓存）
+    url, metadata = await handler.handle_get_image_url(
+        image_key=image_key,
+        force_refresh=refresh
+    )
 
-        response_time = time.time() - start_time
+    response_time = time.time() - start_time
 
-        logger.info(
-            f"图片代理访问: {image_key}",
-            extra={
-                'image_key': image_key,
-                'mode': mode,
-                'from_cache': metadata.get('from_cache', False),
-                'response_time': response_time
+    logger.info(
+        f"图片代理访问: {image_key}",
+        extra={
+            'image_key': image_key,
+            'mode': mode,
+            'from_cache': metadata.get('from_cache', False),
+            'response_time': response_time
+        }
+    )
+
+    # 根据模式返回不同响应
+    if mode == "redirect":
+        # 重定向模式：返回302跳转
+        logger.debug(f"使用重定向模式访问: {image_key}")
+        return RedirectResponse(
+            url=url,
+            status_code=302,
+            headers={
+                'Cache-Control': 'public, max-age=300',  # 5分钟
+                'X-Cache-Status': 'hit' if metadata.get('from_cache') else 'miss',
+                'X-Response-Time': str(response_time)
             }
         )
-
-        # 根据模式返回不同响应
-        if mode == "redirect":
-            # 重定向模式：返回302跳转
-            logger.debug(f"使用重定向模式访问: {image_key}")
-            return RedirectResponse(
-                url=url,
-                status_code=302,
-                headers={
-                    'Cache-Control': 'public, max-age=300',  # 5分钟
-                    'X-Cache-Status': 'hit' if metadata.get('from_cache') else 'miss',
-                    'X-Response-Time': str(response_time)
-                }
-            )
-        else:
-            # 代理模式：通过后端代理转发
-            logger.debug(f"使用代理模式访问: {image_key}")
-            return await _proxy_image_content(url, image_key, response_time)
-
-    except ValueError as e:
-        logger.warning(f"图片代理访问参数错误: {str(e)}", extra={'image_key': image_key})
-        return Response(
-            content=f"Invalid image key: {str(e)}",
-            status_code=400,
-            media_type="text/plain"
-        )
-    except Exception as e:
-        logger.error(
-            f"图片代理访问失败: {str(e)}",
-            extra={'image_key': image_key, 'mode': mode, 'error': str(e)}
-        )
-        return Response(
-            content="Image proxy error",
-            status_code=500,
-            media_type="text/plain"
-        )
+    else:
+        # 代理模式：通过后端代理转发
+        logger.debug(f"使用代理模式访问: {image_key}")
+        return await _proxy_image_content(url, image_key, response_time)
 
 
 async def _proxy_image_content(url: str, image_key: str, response_time: float):
@@ -123,44 +103,21 @@ async def _proxy_image_content(url: str, image_key: str, response_time: float):
     """
     import httpx
 
-    try:
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            # 发起请求获取图片
-            response = await client.get(url)
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        # 发起请求获取图片
+        response = await client.get(url)
 
-            # 返回流式响应
-            return StreamingResponse(
-                content=response.iter_bytes(),
-                status_code=response.status_code,
-                media_type=response.headers.get('content-type', 'image/jpeg'),
-                headers={
-                    'Cache-Control': 'public, max-age=300',
-                    'X-Cache-Status': 'hit',  # 代理模式总是hit
-                    'X-Response-Time': str(response_time),
-                    'X-Original-URL': url
-                }
-            )
-
-    except httpx.TimeoutException:
-        logger.error(f"代理访问超时: {image_key}", extra={'image_key': image_key})
-        return Response(
-            content="Request timeout",
-            status_code=504,
-            media_type="text/plain"
-        )
-    except httpx.RequestError as e:
-        logger.error(f"代理访问请求错误: {str(e)}", extra={'image_key': image_key})
-        return Response(
-            content=f"Request error: {str(e)}",
-            status_code=502,
-            media_type="text/plain"
-        )
-    except Exception as e:
-        logger.error(f"代理访问失败: {str(e)}", extra={'image_key': image_key})
-        return Response(
-            content="Proxy error",
-            status_code=500,
-            media_type="text/plain"
+        # 返回流式响应
+        return StreamingResponse(
+            content=response.iter_bytes(),
+            status_code=response.status_code,
+            media_type=response.headers.get('content-type', 'image/jpeg'),
+            headers={
+                'Cache-Control': 'public, max-age=300',
+                'X-Cache-Status': 'hit',  # 代理模式总是hit
+                'X-Response-Time': str(response_time),
+                'X-Original-URL': url
+            }
         )
 
 
@@ -185,26 +142,13 @@ async def get_image_status(
         StandardResponse: 图片状态信息
     """
     handler = ImageProxyHandler(db)
+    status = await handler.handle_check_url_status(image_key)
 
-    try:
-        status = await handler.handle_check_url_status(image_key)
-
-        return StandardResponse(
-            status="success",
-            message="获取图片状态成功",
-            data=status
-        )
-
-    except Exception as e:
-        logger.error(
-            f"获取图片状态失败: {str(e)}",
-            extra={'image_key': image_key, 'error': str(e)}
-        )
-        return StandardResponse(
-            status="error",
-            message=f"获取图片状态失败: {str(e)}",
-            data={'image_key': image_key}
-        )
+    return StandardResponse(
+        status="success",
+        message="获取图片状态成功",
+        data=status
+    )
 
 
 @router.post(
@@ -228,30 +172,17 @@ async def refresh_image_url(
         StandardResponse: 刷新结果
     """
     handler = ImageProxyHandler(db)
+    new_url, metadata = await handler.handle_refresh_url(image_key)
 
-    try:
-        new_url, metadata = await handler.handle_refresh_url(image_key)
-
-        return StandardResponse(
-            status="success",
-            message="图片URL刷新成功",
-            data={
-                'image_key': image_key,
-                'url': new_url,
-                'metadata': metadata
-            }
-        )
-
-    except Exception as e:
-        logger.error(
-            f"刷新图片URL失败: {str(e)}",
-            extra={'image_key': image_key, 'error': str(e)}
-        )
-        return StandardResponse(
-            status="error",
-            message=f"刷新图片URL失败: {str(e)}",
-            data={'image_key': image_key}
-        )
+    return StandardResponse(
+        status="success",
+        message="图片URL刷新成功",
+        data={
+            'image_key': image_key,
+            'url': new_url,
+            'metadata': metadata
+        }
+    )
 
 
 @router.get(
@@ -292,38 +223,26 @@ async def batch_get_image_urls(
             data={}
         )
 
-    try:
-        results = await handler.handle_get_multiple_urls(
-            image_keys=keys_list,
-            force_refresh=refresh,
-            use_cache=use_cache,
-            max_concurrent=max_concurrent
-        )
+    results = await handler.handle_get_multiple_urls(
+        image_keys=keys_list,
+        force_refresh=refresh,
+        use_cache=use_cache,
+        max_concurrent=max_concurrent
+    )
 
-        # 转换为响应格式
-        response_data = {
-            'total_requested': len(keys_list),
-            'total_returned': len(results),
-            'urls': {key: url for key, (url, metadata) in results.items()},
-            'metadata': {key: metadata for key, (url, metadata) in results.items()}
-        }
+    # 转换为响应格式
+    response_data = {
+        'total_requested': len(keys_list),
+        'total_returned': len(results),
+        'urls': {key: url for key, (url, metadata) in results.items()},
+        'metadata': {key: metadata for key, (url, metadata) in results.items()}
+    }
 
-        return StandardResponse(
-            status="success",
-            message=f"成功获取 {len(results)}/{len(keys_list)} 个URL",
-            data=response_data
-        )
-
-    except Exception as e:
-        logger.error(
-            f"批量获取图片URL失败: {str(e)}",
-            extra={'count': len(keys_list), 'error': str(e)}
-        )
-        return StandardResponse(
-            status="error",
-            message=f"批量获取图片URL失败: {str(e)}",
-            data={'requested': len(keys_list)}
-        )
+    return StandardResponse(
+        status="success",
+        message=f"成功获取 {len(results)}/{len(keys_list)} 个URL",
+        data=response_data
+    )
 
 
 @router.get(
@@ -345,23 +264,13 @@ async def get_proxy_stats(
         StandardResponse: 统计信息
     """
     handler = ImageProxyHandler(db)
+    stats = await handler.handle_get_performance_stats()
 
-    try:
-        stats = await handler.handle_get_performance_stats()
-
-        return StandardResponse(
-            status="success",
-            message="获取统计信息成功",
-            data=stats
-        )
-
-    except Exception as e:
-        logger.error(f"获取统计信息失败: {str(e)}")
-        return StandardResponse(
-            status="error",
-            message=f"获取统计信息失败: {str(e)}",
-            data={}
-        )
+    return StandardResponse(
+        status="success",
+        message="获取统计信息成功",
+        data=stats
+    )
 
 
 @router.post(
@@ -383,23 +292,13 @@ async def cleanup_expired_cache(
         StandardResponse: 清理结果
     """
     handler = ImageProxyHandler(db)
+    cleaned = await handler.handle_cleanup_expired_cache()
 
-    try:
-        cleaned = await handler.handle_cleanup_expired_cache()
-
-        return StandardResponse(
-            status="success",
-            message=f"清理完成，共清理 {cleaned} 个过期缓存",
-            data={'cleaned': cleaned}
-        )
-
-    except Exception as e:
-        logger.error(f"清理过期缓存失败: {str(e)}")
-        return StandardResponse(
-            status="error",
-            message=f"清理过期缓存失败: {str(e)}",
-            data={}
-        )
+    return StandardResponse(
+        status="success",
+        message=f"清理完成，共清理 {cleaned} 个过期缓存",
+        data={'cleaned': cleaned}
+    )
 
 
 @router.post(
@@ -436,29 +335,20 @@ async def preload_image_urls(
             data={}
         )
 
-    try:
-        results = await handler.handle_preload_urls(
-            image_keys=keys_list,
-            max_concurrent=max_concurrent
-        )
+    results = await handler.handle_preload_urls(
+        image_keys=keys_list,
+        max_concurrent=max_concurrent
+    )
 
-        success_count = sum(1 for v in results.values() if v)
+    success_count = sum(1 for v in results.values() if v)
 
-        return StandardResponse(
-            status="success",
-            message=f"预加载完成，成功: {success_count}/{len(keys_list)}",
-            data={
-                'total': len(keys_list),
-                'success': success_count,
-                'failed': len(keys_list) - success_count,
-                'results': results
-            }
-        )
-
-    except Exception as e:
-        logger.error(f"预加载图片URL失败: {str(e)}", extra={'count': len(keys_list)})
-        return StandardResponse(
-            status="error",
-            message=f"预加载图片URL失败: {str(e)}",
-            data={'requested': len(keys_list)}
-        )
+    return StandardResponse(
+        status="success",
+        message=f"预加载完成，成功: {success_count}/{len(keys_list)}",
+        data={
+            'total': len(keys_list),
+            'success': success_count,
+            'failed': len(keys_list) - success_count,
+            'results': results
+        }
+    )

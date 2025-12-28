@@ -4,7 +4,7 @@ Celery队列管理API端点
 """
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
@@ -35,24 +35,16 @@ async def list_active_tasks(
     Returns:
         StandardResponse: 包含活跃任务列表的响应
     """
-    try:
-        handler = CeleryQueueHandler(db)
-        tasks = await handler.handle_list_active_tasks()
+    handler = CeleryQueueHandler(db)
+    tasks = await handler.handle_list_active_tasks()
 
-        logger.info(f"获取到 {len(tasks)} 个活跃任务")
+    logger.info(f"获取到 {len(tasks)} 个活跃任务")
 
-        return StandardResponse(
-            status="success",
-            message=f"获取到 {len(tasks)} 个活跃任务",
-            data={"tasks": tasks}
-        )
-
-    except Exception as e:
-        logger.error("获取活跃任务失败", extra={'error': str(e)})
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取活跃任务失败: {str(e)}"
-        ) from e
+    return StandardResponse(
+        status="success",
+        message=f"获取到 {len(tasks)} 个活跃任务",
+        data={"tasks": tasks}
+    )
 
 
 @router.get(
@@ -75,30 +67,16 @@ async def get_task_status(
     Returns:
         StandardResponse: 包含任务状态的响应
     """
-    try:
-        handler = CeleryQueueHandler(db)
-        result = await handler.handle_get_task_status(task_id)
+    handler = CeleryQueueHandler(db)
+    result = await handler.handle_get_task_status(task_id)
 
-        logger.info("获取任务状态成功", extra={'task_id': task_id})
+    logger.info("获取任务状态成功", extra={'task_id': task_id})
 
-        return StandardResponse(
-            status="success",
-            message="获取任务状态成功",
-            data=result
-        )
-
-    except ValueError as e:
-        logger.warning("任务不存在", extra={'task_id': task_id})
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="任务不存在"
-        ) from e
-    except Exception as e:
-        logger.error("获取任务状态失败", extra={'task_id': task_id, 'error': str(e)})
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取任务状态失败: {str(e)}"
-        ) from e
+    return StandardResponse(
+        status="success",
+        message="获取任务状态成功",
+        data=result
+    )
 
 
 @router.get(
@@ -119,30 +97,22 @@ async def get_queue_statistics(
     Returns:
         StandardResponse: 包含队列统计的响应
     """
-    try:
-        handler = CeleryQueueHandler(db)
-        stats = await handler.handle_get_queue_stats()
+    handler = CeleryQueueHandler(db)
+    stats = await handler.handle_get_queue_stats()
 
-        logger.info(
-            "获取队列统计成功",
-            extra={
-                'total_workers': stats["total_workers"],
-                'active_tasks': stats["active_tasks"]
-            }
-        )
+    logger.info(
+        "获取队列统计成功",
+        extra={
+            'total_workers': stats["total_workers"],
+            'active_tasks': stats["active_tasks"]
+        }
+    )
 
-        return StandardResponse(
-            status="success",
-            message="获取队列统计成功",
-            data=stats
-        )
-
-    except Exception as e:
-        logger.error("获取队列统计失败", extra={'error': str(e)})
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取队列统计失败: {str(e)}"
-        ) from e
+    return StandardResponse(
+        status="success",
+        message="获取队列统计成功",
+        data=stats
+    )
 
 
 @router.get(
@@ -163,24 +133,16 @@ async def get_cache_statistics(
     Returns:
         StandardResponse: 包含缓存统计的响应
     """
-    try:
-        handler = CeleryQueueHandler(db)
-        stats = await handler.handle_get_cache_stats()
+    handler = CeleryQueueHandler(db)
+    stats = await handler.handle_get_cache_stats()
 
-        logger.info("获取缓存统计成功")
+    logger.info("获取缓存统计成功")
 
-        return StandardResponse(
-            status="success",
-            message="获取缓存统计成功",
-            data=stats
-        )
-
-    except Exception as e:
-        logger.error("获取缓存统计失败", extra={'error': str(e)})
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取缓存统计失败: {str(e)}"
-        ) from e
+    return StandardResponse(
+        status="success",
+        message="获取缓存统计成功",
+        data=stats
+    )
 
 
 @router.delete(
@@ -205,30 +167,16 @@ async def revoke_task_endpoint(
     Returns:
         StandardResponse: 撤销结果
     """
-    try:
-        handler = CeleryQueueHandler(db)
-        result = await handler.handle_revoke_task(task_id, terminate)
+    handler = CeleryQueueHandler(db)
+    result = await handler.handle_revoke_task(task_id, terminate)
 
-        logger.info("任务撤销成功", extra={'task_id': task_id, 'terminate': terminate})
+    logger.info("任务撤销成功", extra={'task_id': task_id, 'terminate': terminate})
 
-        return StandardResponse(
-            status="success",
-            message=f"任务 {task_id} 已成功撤销",
-            data=result
-        )
-
-    except ValueError as e:
-        logger.warning("任务不存在或无法撤销", extra={'task_id': task_id})
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="任务不存在或无法撤销"
-        ) from e
-    except Exception as e:
-        logger.error("撤销任务失败", extra={'task_id': task_id, 'error': str(e)})
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"撤销任务失败: {str(e)}"
-        ) from e
+    return StandardResponse(
+        status="success",
+        message=f"任务 {task_id} 已成功撤销",
+        data=result
+    )
 
 
 @router.get(
@@ -249,25 +197,16 @@ async def health_check(
     Returns:
         StandardResponse: 健康状态
     """
-    try:
-        handler = CeleryQueueHandler(db)
-        result = await handler.handle_health_check()
+    handler = CeleryQueueHandler(db)
+    result = await handler.handle_health_check()
 
-        if result["status"] == "healthy":
-            logger.info("健康检查通过", extra={'workers': result.get('workers')})
-        else:
-            logger.warning("健康检查失败", extra={'message': result['message']})
+    if result["status"] == "healthy":
+        logger.info("健康检查通过", extra={'workers': result.get('workers')})
+    else:
+        logger.warning("健康检查失败", extra={'message': result['message']})
 
-        return StandardResponse(
-            status="success" if result["status"] == "healthy" else "error",
-            message=result["message"],
-            data=result
-        )
-
-    except Exception as e:
-        logger.error("健康检查失败", extra={'error': str(e)})
-        return StandardResponse(
-            status="error",
-            message=f"健康检查失败: {str(e)}",
-            data={"status": "unhealthy"}
-        )
+    return StandardResponse(
+        status="success" if result["status"] == "healthy" else "error",
+        message=result["message"],
+        data=result
+    )

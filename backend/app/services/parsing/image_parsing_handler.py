@@ -90,7 +90,7 @@ class ImageParsingHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"图片解析任务创建失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_get_parse_status(
         self,
@@ -149,4 +149,4 @@ class ImageParsingHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"查询解析状态失败: {str(e)}"
-            )
+            ) from e

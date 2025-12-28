@@ -74,7 +74,7 @@ class ImageUploadHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"图片上传失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_batch_upload(
         self,
@@ -152,7 +152,7 @@ class ImageUploadHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"批量图片上传失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_presigned_upload(
         self,
@@ -207,4 +207,4 @@ class ImageUploadHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"生成预签名URL失败: {str(e)}"
-            )
+            ) from e
