@@ -9,7 +9,7 @@ from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.services.image.upload_handler import ImageUploadHandler
+from app.services.image.upload.handler import ImageUploadHandler
 from app.schemas.image_upload import PresignedUrlRequest
 from app.schemas.common import StandardResponse
 from app.core.log_utils import get_logger

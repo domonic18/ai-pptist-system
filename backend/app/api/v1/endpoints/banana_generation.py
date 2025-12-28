@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.services.generation.banana_generation_handler import BananaGenerationHandler
+from app.services.generation.banana_generation.handler import BananaGenerationHandler
 from app.schemas.banana_generation import (
     SplitOutlineRequest,
     GenerateBatchSlidesRequest,

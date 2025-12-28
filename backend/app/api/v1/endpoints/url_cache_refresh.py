@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.services.cache.url_refresh_handler import UrlRefreshHandler
+from app.services.cache.url_refresh.handler import UrlRefreshHandler
 from app.schemas.url_cache_refresh import (
     UrlRefreshRequest,
     BatchUrlRefreshRequest,

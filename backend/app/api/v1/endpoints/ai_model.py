@@ -12,7 +12,7 @@ from app.schemas.common import StandardResponse
 from app.schemas.ai_model import (
     AIModelCreate, AIModelUpdate, AIModelResponse, AIModelListResponse
 )
-from app.services.ai_model.management_handler import ManagementHandler
+from app.services.ai_model.management.handler import ManagementHandler
 from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)

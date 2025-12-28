@@ -14,10 +14,10 @@ from app.schemas.generation_outline import OutlineGenerationRequest
 from app.schemas.generation_slides import SlidesGenerationRequest
 from app.schemas.image_manager import ImageGenerationAndStoreRequest, ImageGenerationAndStoreResponse
 from app.schemas.common import StandardResponse
-from app.services.generation.outline_stream_handler import OutlineStreamHandler
-from app.services.generation.slides_stream_handler import SlidesStreamHandler
-from app.services.image.image_generation_handler import ImageGenerationHandler
-from app.services.image.image_generation_store_service import ImageGenerationStoreService
+from app.services.generation.outline_stream.handler import OutlineStreamHandler
+from app.services.generation.slides_stream.handler import SlidesStreamHandler
+from app.services.image.generation.handler import ImageGenerationHandler
+from app.services.image.generation.store_service import ImageGenerationStoreService
 from app.core.log_utils import get_logger
 
 logger = get_logger(__name__)

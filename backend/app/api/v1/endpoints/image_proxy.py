@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.services.cache.image_proxy_handler import ImageProxyHandler
+from app.services.cache.image_proxy.handler import ImageProxyHandler
 from app.core.log_utils import get_logger
 from app.schemas.common import StandardResponse
 

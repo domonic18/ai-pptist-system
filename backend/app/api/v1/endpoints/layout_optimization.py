@@ -13,7 +13,7 @@ from app.schemas.layout_optimization import (
     LayoutOptimizationResponseData
 )
 from app.schemas.common import StandardResponse
-from app.services.layout.layout_optimization_handler import LayoutOptimizationHandler
+from app.services.layout.optimization.handler import LayoutOptimizationHandler
 
 
 def _remove_none_values(data: Dict[str, Any]) -> Dict[str, Any]:

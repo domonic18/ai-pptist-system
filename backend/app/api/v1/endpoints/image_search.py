@@ -9,7 +9,7 @@ from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.services.image.search_handler import ImageSearchHandler
+from app.services.image.search.handler import ImageSearchHandler
 from app.schemas.image_search import (
     ImageSearchRequest,
     TagSearchRequest,

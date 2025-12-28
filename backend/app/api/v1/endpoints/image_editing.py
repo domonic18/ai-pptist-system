@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.services.editing.image_editing_handler import ImageEditingHandler
+from app.services.editing.image_editing.handler import ImageEditingHandler
 from app.schemas.image_editing import (
     ParseAndRemoveRequest,
     HybridOCRParseRequest,

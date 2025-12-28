@@ -9,8 +9,8 @@ from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.services.image.management_handler import ManagementHandler
-from app.services.image.search_handler import ImageSearchHandler
+from app.services.image.management.handler import ManagementHandler
+from app.services.image.search.handler import ImageSearchHandler
 from app.schemas.common import StandardResponse
 
 router = APIRouter(tags=["图片管理"])

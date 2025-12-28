@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.services.cache.celery_queue_handler import CeleryQueueHandler
+from app.services.cache.celery_queue.handler import CeleryQueueHandler
 from app.schemas.common import StandardResponse
 from app.core.log_utils import get_logger
 
