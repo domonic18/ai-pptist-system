@@ -1,4 +1,4 @@
 [submodule "frontend"]
 	path = frontend
 	url = https://github.com/domonic18/ai-pptist.git
-	branch = ai-pptist-frontend
+	branch = integration/ai-pptist
