@@ -13,8 +13,8 @@ from datetime import datetime
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.ocr.baidu_ocr_engine import BaiduOCREngine
-from app.services.ocr.multimodal_ocr_engine import MultimodalOCREngine
+from app.core.ocr.baidu_ocr_engine import BaiduOCREngine
+from app.core.ocr.multimodal_ocr_engine import MultimodalOCREngine
 from app.schemas.image_editing import (
     TraditionalOCRResult,
     TraditionalOCRRegion,
