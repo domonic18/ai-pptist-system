@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from celery import group, chain
 from celery.result import AsyncResult
 
-from .celery_app import celery_app
+from celery_app import celery_app
 from app.services.cache.url.service import ImageURLService
 
 logger = logging.getLogger(__name__)

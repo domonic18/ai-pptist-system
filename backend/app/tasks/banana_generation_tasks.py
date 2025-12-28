@@ -9,7 +9,7 @@ Banana PPT 生成 Celery 任务
 from typing import Dict, Any
 from celery import group
 
-from app.services.tasks.celery_app import celery_app
+from celery_app import celery_app
 from app.core.log_utils import get_logger
 from app.models.banana_generation_task import TaskStatus
 from app.utils.async_utils import AsyncRunner

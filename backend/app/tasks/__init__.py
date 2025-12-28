@@ -3,7 +3,7 @@
 基于Celery实现图片URL的定时刷新、批量刷新、PPT生成和任务监控。
 """
 
-from .celery_app import celery_app, init_celery
+from celery_app import celery_app, init_celery
 from .refresh_tasks import (
     refresh_url_cache,
     batch_refresh_url_cache,

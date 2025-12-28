@@ -1,4 +1,15 @@
-"""Celery应用配置"""
+"""
+Celery应用配置
+
+这是 Celery worker 的主配置文件，与 main.py (FastAPI) 同级。
+
+使用方式:
+    # 启动 worker（在 backend/ 目录下）
+    celery -A celery_app worker --loglevel=info -Q banana,quick,batch,maintenance,image_parsing,default
+
+    # 启动 beat（定时任务调度器）
+    celery -A celery_app beat --loglevel=info
+"""
 
 import os
 from pathlib import Path
@@ -17,10 +28,10 @@ celery_app = Celery(
     broker=os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0"),
     backend=os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1"),
     include=[
-        "app.services.tasks.refresh_tasks",
-        "app.services.tasks.banana_generation_tasks",
-        "app.services.tasks.image_parsing_tasks",
-        "app.services.tasks.image_editing_tasks",
+        "app.tasks.refresh_tasks",
+        "app.tasks.banana_generation_tasks",
+        "app.tasks.image_parsing_tasks",
+        "app.tasks.image_editing_tasks",
     ],
 )
 
@@ -32,7 +43,7 @@ def on_worker_init(**kwargs):
     注册所有 AI Provider，确保 Worker 可以使用图片生成等功能
     """
     logger.info("Celery Worker 初始化中，注册 AI Provider...")
-    
+
     try:
         from app.core.ai.registry import register_all_providers
         register_all_providers()
@@ -61,15 +72,15 @@ celery_app.conf.update(
 
     # 路由配置
     task_routes={
-        "app.services.tasks.refresh_tasks.refresh_url_cache": {"queue": "quick"},
-        "app.services.tasks.refresh_tasks.batch_refresh_url_cache": {"queue": "batch"},
-        "app.services.tasks.refresh_tasks.cleanup_expired_cache": {"queue": "maintenance"},
-        "app.services.tasks.refresh_tasks.pre_refresh_active_urls": {"queue": "maintenance"},
-        "app.services.tasks.banana_generation_tasks.generate_single_slide_task": {"queue": "banana"},
-        "app.services.tasks.banana_generation_tasks.generate_batch_slides_task": {"queue": "banana"},
-        "app.services.tasks.image_parsing_tasks.parse_image_task": {"queue": "image_parsing"},
-        "app.services.tasks.image_editing_tasks.hybrid_ocr_task": {"queue": "image_editing"},
-        "app.services.tasks.image_editing_tasks.full_editing_task": {"queue": "image_editing"},
+        "app.tasks.refresh_tasks.refresh_url_cache": {"queue": "quick"},
+        "app.tasks.refresh_tasks.batch_refresh_url_cache": {"queue": "batch"},
+        "app.tasks.refresh_tasks.cleanup_expired_cache": {"queue": "maintenance"},
+        "app.tasks.refresh_tasks.pre_refresh_active_urls": {"queue": "maintenance"},
+        "app.tasks.banana_generation_tasks.generate_single_slide_task": {"queue": "banana"},
+        "app.tasks.banana_generation_tasks.generate_batch_slides_task": {"queue": "banana"},
+        "app.tasks.image_parsing_tasks.parse_image_task": {"queue": "image_parsing"},
+        "app.tasks.image_editing_tasks.hybrid_ocr_task": {"queue": "image_editing"},
+        "app.tasks.image_editing_tasks.full_editing_task": {"queue": "image_editing"},
     },
 
     # 队列配置
@@ -87,12 +98,12 @@ celery_app.conf.update(
     # 定期任务
     beat_schedule={
         "refresh-expired-urls-every-hour": {
-            "task": "app.services.tasks.refresh_tasks.cleanup_expired_cache",
+            "task": "app.tasks.refresh_tasks.cleanup_expired_cache",
             "schedule": 3600.0,  # 每小时执行
             "options": {"queue": "maintenance"},
         },
         "pre-refresh-urls-every-15-min": {
-            "task": "app.services.tasks.refresh_tasks.pre_refresh_active_urls",
+            "task": "app.tasks.refresh_tasks.pre_refresh_active_urls",
             "schedule": 900.0,  # 每15分钟执行
             "options": {"queue": "maintenance"},
         },

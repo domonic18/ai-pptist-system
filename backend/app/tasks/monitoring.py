@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from celery.result import AsyncResult
 from celery.app.control import Inspect
 
-from .celery_app import celery_app
+from celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 

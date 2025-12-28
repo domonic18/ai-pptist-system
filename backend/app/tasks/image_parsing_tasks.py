@@ -7,7 +7,7 @@
 from typing import Dict, Any
 from celery import Task
 
-from app.services.tasks.celery_app import celery_app
+from celery_app import celery_app
 from app.core.log_utils import get_logger
 from app.models.image_parse_task import ParseTaskStatus
 from app.utils.async_utils import AsyncRunner
@@ -80,7 +80,7 @@ def _execute_image_parsing(
     """
     from app.core.cache.redis import get_redis
     from app.db.database import AsyncSessionLocal
-    from app.services.parsing.image_parsing.service import ImageParsingService
+    from app.services.image.parsing.service import ImageParsingService
 
     with AsyncRunner() as runner:
         async def do_parsing():

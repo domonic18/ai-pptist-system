@@ -6,12 +6,8 @@ from typing import Optional
 from celery import Celery
 from fastapi import FastAPI
 
-from app.services.tasks import (
-    celery_app,
-    init_celery,
-    get_queue_stats,
-    TaskStatus,
-)
+from celery_app import celery_app, init_celery
+from app.tasks import get_queue_stats, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +43,7 @@ class CeleryManager:
             # 这里仅记录配置信息
             logger.info(
                 "Celery configured. Use the following command to start workers:\n"
-                "  celery -A app.services.tasks worker --loglevel=info "
+                "  celery -A app.tasks worker --loglevel=info "
                 "-Q banana,quick,batch,maintenance,image_parsing,default"
             )
             logger.info("Celery queues: banana, quick, batch, maintenance, image_parsing, default")
