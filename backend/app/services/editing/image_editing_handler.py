@@ -106,7 +106,7 @@ class ImageEditingHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"MinerU任务创建失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_parse_with_hybrid_ocr(
         self,
@@ -173,7 +173,7 @@ class ImageEditingHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"混合OCR任务创建失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_get_editing_status(
         self,
@@ -233,7 +233,7 @@ class ImageEditingHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"查询编辑状态失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_parse_and_remove_text(
         self,
@@ -329,4 +329,4 @@ class ImageEditingHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"图片编辑任务创建失败: {str(e)}"
-            )
+            ) from e

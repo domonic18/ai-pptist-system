@@ -62,7 +62,7 @@ class TagLibraryHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"获取所有标签失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_get_popular_tags(self, limit: int = 10) -> Dict[str, Any]:
         """处理获取热门标签请求"""
@@ -97,7 +97,7 @@ class TagLibraryHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"获取热门标签失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_create_tag(self, tag_data: TagCreate) -> Dict[str, Any]:
         """处理创建标签请求"""
@@ -133,7 +133,7 @@ class TagLibraryHandler:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e)
-            )
+            ) from e
         except Exception as e:
             logger.error(
                 "创建标签失败 - 系统错误",
@@ -145,7 +145,7 @@ class TagLibraryHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"创建标签失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_delete_tag(self, tag_name: str) -> Dict[str, Any]:
         """处理删除标签请求"""
@@ -179,7 +179,7 @@ class TagLibraryHandler:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(e)
-            )
+            ) from e
         except Exception as e:
             logger.error(
                 "删除标签失败 - 系统错误",
@@ -191,7 +191,7 @@ class TagLibraryHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"删除标签失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_search_tags(self, query: str, limit: int = 10) -> Dict[str, Any]:
         """处理搜索标签请求"""
@@ -228,4 +228,4 @@ class TagLibraryHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"搜索标签失败: {str(e)}"
-            )
+            ) from e

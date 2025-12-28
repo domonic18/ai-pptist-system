@@ -56,7 +56,7 @@ class ImageTaggingHandler:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(e)
-            )
+            ) from e
         except Exception as e:
             logger.error(
                 "获取图片标签失败 - 系统错误",
@@ -69,7 +69,7 @@ class ImageTaggingHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"获取图片标签失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_add_image_tags(
         self,
@@ -114,7 +114,7 @@ class ImageTaggingHandler:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(e)
-            )
+            ) from e
         except Exception as e:
             logger.error(
                 "添加图片标签失败 - 系统错误",
@@ -128,7 +128,7 @@ class ImageTaggingHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"添加图片标签失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_update_image_tags(
         self,
@@ -174,7 +174,7 @@ class ImageTaggingHandler:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(e)
-            )
+            ) from e
         except Exception as e:
             logger.error(
                 "更新图片标签失败 - 系统错误",
@@ -188,7 +188,7 @@ class ImageTaggingHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"更新图片标签失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_delete_image_tags(
         self,
@@ -233,7 +233,7 @@ class ImageTaggingHandler:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(e)
-            )
+            ) from e
         except Exception as e:
             logger.error(
                 "删除图片标签失败 - 系统错误",
@@ -247,7 +247,7 @@ class ImageTaggingHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"删除图片标签失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_search_images_by_tags(
         self,
@@ -293,7 +293,7 @@ class ImageTaggingHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"根据标签搜索图片失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_batch_operate_image_tags(
         self,
@@ -338,7 +338,7 @@ class ImageTaggingHandler:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e)
-            )
+            ) from e
         except Exception as e:
             logger.error(
                 "批量操作图片标签失败 - 系统错误",
@@ -351,4 +351,4 @@ class ImageTaggingHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"批量操作图片标签失败: {str(e)}"
-            )
+            ) from e

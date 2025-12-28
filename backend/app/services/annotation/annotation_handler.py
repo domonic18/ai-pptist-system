@@ -84,7 +84,7 @@ class AnnotationHandler:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e)
-            )
+            ) from e
         except Exception as e:
             logger.error(
                 log_messages.OPERATION_FAILED,
@@ -94,7 +94,7 @@ class AnnotationHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"标注失败: {str(e)}"
-            )
+            ) from e
 
     async def handle_batch_annotation_start(
         self,
@@ -159,7 +159,7 @@ class AnnotationHandler:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e)
-            )
+            ) from e
         except Exception as e:
             logger.error(
                 log_messages.OPERATION_FAILED,
@@ -169,7 +169,7 @@ class AnnotationHandler:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"启动批量标注失败: {str(e)}"
-            )
+            ) from e
 
     def _validate_single_annotation_request(self, request: SingleAnnotationRequest):
         """验证单张幻灯片标注请求"""

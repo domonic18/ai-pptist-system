@@ -22,10 +22,10 @@ from app.api.v1.endpoints import (
     image_parsing,
     image_proxy,
     image_search,
-    image_tags,
+    image_tagging,
     image_upload,
     layout_optimization,
-    tags,
+    tag_library,
     url_cache_refresh,
 )
 
@@ -33,14 +33,14 @@ api_router = APIRouter()
 
 # ==================== 图片管理相关路由 ====================
 api_router.include_router(image_manager.router, prefix="/images", tags=["图片管理"])
-api_router.include_router(image_tags.router, prefix="/images", tags=["图片标签"])
+api_router.include_router(image_tagging.router, prefix="/images", tags=["图片标签操作"])
 api_router.include_router(image_upload.router, prefix="/images/upload", tags=["图片上传"])
 api_router.include_router(image_search.router, prefix="/images/search", tags=["图片搜索"])
 # image_proxy使用完全不同的前缀，彻底避免与image_manager路由冲突
 api_router.include_router(image_proxy.router, prefix="/img-access", tags=["图片代理"])
 
-# ==================== 标签管理路由 ====================
-api_router.include_router(tags.router, prefix="/tags", tags=["标签管理"])
+# ==================== 标签库管理路由 ====================
+api_router.include_router(tag_library.router, prefix="/tag-library", tags=["标签库管理"])
 
 # ==================== AI模型管理路由 ====================
 api_router.include_router(ai_model.router, prefix="/ai-models", tags=["AI模型管理"])
