@@ -1,5 +1,6 @@
 -- 09_sso_support.sql - SSO认证支持
 -- 添加用户认证和会话管理相关表和字段
+-- 索引优化
 
 -- 设置搜索路径
 SET search_path TO public;
@@ -61,6 +62,7 @@ CREATE TABLE IF NOT EXISTS user_sessions (
 
     -- 时间戳
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     revoked_at TIMESTAMP WITH TIME ZONE               -- 撤销时间（NULL表示活跃）
 );
 
@@ -70,13 +72,14 @@ COMMENT ON COLUMN user_sessions.token_jti IS 'JWT Token的唯一标识（jti cla
 COMMENT ON COLUMN user_sessions.refresh_token_jti IS '刷新Token的唯一标识';
 COMMENT ON COLUMN user_sessions.expires_at IS '访问令牌过期时间';
 COMMENT ON COLUMN user_sessions.refresh_expires_at IS '刷新令牌过期时间';
+COMMENT ON COLUMN user_sessions.updated_at IS '会话最后更新时间';
 COMMENT ON COLUMN user_sessions.revoked_at IS '会话撤销时间，NULL表示会话活跃';
 
 -- 创建索引
 CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_token_jti ON user_sessions(token_jti);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_refresh_token_jti ON user_sessions(refresh_token_jti);
-CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at     ON user_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_revoked_at ON user_sessions(revoked_at);
 
 
