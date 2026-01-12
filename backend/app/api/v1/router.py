@@ -14,6 +14,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     annotation,
     ai_model,
+    auth,
     banana_generation,
     celery_queue_manager,
     generation,
@@ -30,6 +31,9 @@ from app.api.v1.endpoints import (
 )
 
 api_router = APIRouter()
+
+# ==================== 认证路由 ====================
+api_router.include_router(auth.router, tags=["认证"])
 
 # ==================== 图片管理相关路由 ====================
 api_router.include_router(image_manager.router, prefix="/images", tags=["图片管理"])

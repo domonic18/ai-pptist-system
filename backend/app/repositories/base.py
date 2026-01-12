@@ -66,6 +66,9 @@ class BaseRepository(ABC):
 
     async def create(self, **kwargs) -> ModelType:
         """创建新记录"""
+        import time
+        start_time = time.time()
+
         try:
             logger.info(log_messages.DB_UPDATE_START,
                        operation_name="create",
@@ -76,16 +79,26 @@ class BaseRepository(ABC):
             if hasattr(self.model, 'id') and 'id' not in kwargs:
                 kwargs['id'] = generate_uuid()
 
+            logger.info(f"[BASE-CREATE-ADD] 添加实例到数据库 - model: {self.model.__name__}")
             instance = self.model(**kwargs)
             self.db.add(instance)
+
+            logger.info(f"[BASE-CREATE-COMMIT-START] 开始提交事务 - model: {self.model.__name__}, id: {kwargs.get('id')}")
+            commit_start = time.time()
             await self.db.commit()
+            logger.info(f"[BASE-CREATE-COMMIT-END] 事务提交完成 - 耗时: {time.time() - commit_start:.3f}s")
+
+            logger.info(f"[BASE-CREATE-REFRESH-START] 开始刷新实例 - model: {self.model.__name__}, id: {kwargs.get('id')}")
+            refresh_start = time.time()
             await self.db.refresh(instance)
+            logger.info(f"[BASE-CREATE-REFRESH-END] 实例刷新完成 - 耗时: {time.time() - refresh_start:.3f}s")
 
             logger.info(log_messages.DB_UPDATE_SUCCESS,
                        operation_name="create",
                        model_name=self.model.__name__,
                        record_id=instance.id)
 
+            logger.info(f"[BASE-CREATE-DONE] 创建完成 - 总耗时: {time.time() - start_time:.3f}s")
             return instance
 
         except Exception as e:

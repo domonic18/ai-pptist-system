@@ -39,7 +39,9 @@ dependencies = [
     # 数据验证和配置
     "pydantic>=2.9.0",
     "pydantic-settings==2.1.0",
+    "email-validator>=2.0.0",  # Email验证（支持Pydantic的EmailStr类型）
     "python-dotenv==1.0.0",
+
 
     # AI和机器学习
     "openai>=1.17,<2.0.0",

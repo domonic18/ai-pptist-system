@@ -5,7 +5,7 @@ SQLAlchemy数据库连接配置
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import QueuePool
 
 from app.core.config import settings
 
@@ -13,7 +13,19 @@ from app.core.config import settings
 engine = create_async_engine(
     settings.async_database_url,
     echo=settings.db_echo,
-    poolclass=NullPool,  # 对于开发环境使用NullPool
+    # 使用 QueuePool 替代 NullPool，提供更好的连接管理
+    poolclass=QueuePool,
+    pool_size=5,  # 连接池大小
+    max_overflow=10,  # 最大溢出连接数
+    pool_pre_ping=True,  # 连接健康检查
+    pool_recycle=3600,  # 连接回收时间（秒）
+    # 设置连接超时，避免无限等待
+    connect_args={
+        "server_settings": {
+            "lock_timeout": "5s",  # 锁等待超时
+            "statement_timeout": "30s",  # 语句执行超时
+        }
+    },
     future=True
 )
 

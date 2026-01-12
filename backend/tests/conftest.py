@@ -145,15 +145,27 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "tags: 标签相关测试")
     config.addinivalue_line("markers", "tag_service: 标签服务测试")
     config.addinivalue_line("markers", "image_tags: 图片标签测试")
+    # 配置 pytest-asyncio
+    config.addinivalue_line("markers", "asyncio: 异步测试标记")
+
+    # 设置 asyncio_mode 为 auto（兼容旧版本 pytest-asyncio）
+    try:
+        import pytest_asyncio
+        # 对于 pytest-asyncio >= 0.21，asyncio_mode 在 pytest.ini 中配置
+        # 对于旧版本，在这里设置
+        if not hasattr(config.option, 'asyncio_mode'):
+            config.option.asyncio_mode = 'auto'
+    except ImportError:
+        pass  # pytest-asyncio 未安装
 
 
 # 测试运行前的检查
 def pytest_sessionstart(session):
     """测试会话开始前的检查"""
-    print(f"\n🚀 开始集成测试")
-    print(f"📡 测试服务器: {TEST_SERVER_URL}")
+    print(f"\n[START] 开始集成测试")
+    print(f"[INFO] 测试服务器: {TEST_SERVER_URL}")
 
 
 def pytest_sessionfinish(session, exitstatus):
     """测试会话结束后的清理"""
-    print(f"\n✅ 测试完成，退出状态: {exitstatus}")
+    print(f"\n[DONE] 测试完成，退出状态: {exitstatus}")
