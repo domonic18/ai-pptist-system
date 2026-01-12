@@ -71,6 +71,13 @@ dependencies = [
     "jieba>=0.42.1",
     "beautifulsoup4>=4.12.0",  # HTML解析
     "Levenshtein>=0.25.1",  # 字符串相似度计算（混合OCR）
+
+    # 认证和安全
+    "python3-saml>=1.15.0",  # SAML 2.0 SSO认证支持
+    "python-jose[cryptography]>=3.3.0",  # JWT Token处理
+    "passlib[bcrypt]>=1.7.4",  # 密码哈希和验证
+    "eventlet>=0.40.0",  # Celery eventlet pool支持
+    "nanoid>=2.0.0",  # 唯一ID生成器
 ]
 
 # 可选依赖组

@@ -44,6 +44,24 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 3600
 
+    # ==================== JWT认证配置 ====================
+    JWT_SECRET_KEY: str = "your-super-secret-key-change-in-production-please-use-strong-random-key-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+
+    # ==================== 密码配置 ====================
+    PASSWORD_BCRYPT_ROUNDS: int = 12
+    PASSWORD_MIN_LENGTH: int = 8
+    PASSWORD_REQUIRE_UPPERCASE: bool = True
+    PASSWORD_REQUIRE_LOWERCASE: bool = True
+    PASSWORD_REQUIRE_DIGIT: bool = True
+    PASSWORD_REQUIRE_SPECIAL: bool = False
+    PASSWORD_SPECIAL_CHARS: str = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+
+    # 密码重置令牌有效期（小时）
+    PASSWORD_RESET_TOKEN_EXPIRE_HOURS: int = 24
+
     # ==================== 文件存储配置 ====================
     upload_dir: str = "uploads"
     export_dir: str = "exports"
@@ -302,6 +320,45 @@ class Settings(BaseSettings):
     def absolute_log_file(self) -> str:
         """获取绝对日志文件路径"""
         return str(get_workspace_path(self.log_dir) / self.log_file)
+
+    # ==================== 认证相关计算属性 ====================
+    @property
+    def jwt_settings(self) -> dict:
+        """获取JWT配置字典"""
+        return {
+            "secret_key": self.JWT_SECRET_KEY,
+            "algorithm": self.JWT_ALGORITHM,
+            "access_token_expire_minutes": self.ACCESS_TOKEN_EXPIRE_MINUTES,
+            "refresh_token_expire_days": self.REFRESH_TOKEN_EXPIRE_DAYS
+        }
+
+    @property
+    def password_settings(self) -> dict:
+        """获取密码配置字典"""
+        return {
+            "bcrypt_rounds": self.PASSWORD_BCRYPT_ROUNDS,
+            "min_length": self.PASSWORD_MIN_LENGTH,
+            "require_uppercase": self.PASSWORD_REQUIRE_UPPERCASE,
+            "require_lowercase": self.PASSWORD_REQUIRE_LOWERCASE,
+            "require_digit": self.PASSWORD_REQUIRE_DIGIT,
+            "require_special": self.PASSWORD_REQUIRE_SPECIAL,
+            "special_chars": self.PASSWORD_SPECIAL_CHARS
+        }
+
+    @property
+    def access_token_expire_minutes(self) -> int:
+        """获取访问令牌过期时间（分钟）"""
+        return self.ACCESS_TOKEN_EXPIRE_MINUTES
+
+    @property
+    def refresh_token_expire_days(self) -> int:
+        """获取刷新令牌过期时间（天）"""
+        return self.REFRESH_TOKEN_EXPIRE_DAYS
+
+    @property
+    def password_bcrypt_rounds(self) -> int:
+        """获取密码bcrypt轮数"""
+        return self.PASSWORD_BCRYPT_ROUNDS
 
     model_config = ConfigDict(
         env_file=get_config_path(".env"),
