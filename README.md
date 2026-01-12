@@ -58,11 +58,20 @@ cd backend
 # 安装依赖
 pip install -e .
 
+# 执行数据库初始化脚本
+pythonscripts/init_banana_templates.py
+
 # 启动FastAPI服务（终端1）
 uvicorn app.main:app --reload --port 8000
 
+
 # 启动Celery Worker（终端2）
-celery -A app.tasks.celery_app worker --loglevel=info
+# 根据操作系统选择对应的命令（取消对应行的注释）：
+# 如果是mac，linux环境：
+celery-Aapp.services.tasks.celery_appworker--loglevel=info--concurrency=4-Qbanana,quick,batch,maintenance,image_parsing,image_editing,default
+
+# 如果是windows:
+# celery -A app.services.tasks.celery_app worker --loglevel=info -c 4 -P eventlet -Q banana,quick,batch,maintenance,image_parsing,image_editing,default
 ```
 
 ### 第四步：启动前端服务
