@@ -10,6 +10,7 @@ import os
 import pytest
 import requests
 import time
+from pathlib import Path
 from typing import Dict, Any
 from app.core.config import settings
 
@@ -103,17 +104,57 @@ def wait_for_server(url: str, timeout: int = settings.test_default_timeout) -> b
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_environment():
     """设置测试环境 - 会话级别的fixture"""
-    print("\n🔧 设置测试环境...")
+    print("\n[SETUP] Setting up test environment...")
+
+    # 加载环境变量
+    from dotenv import load_dotenv
+    import os
+
+    # 尝试加载 .env 文件
+    env_paths = [
+        Path(__file__).parent.parent / "config" / ".env",
+        Path(__file__).parent.parent / ".env",
+        Path(__file__).parent.parent.parent / "config" / ".env",
+    ]
+
+    for env_path in env_paths:
+        if env_path.exists():
+            load_dotenv(env_path)
+            print(f"[OK] Loaded environment variables from: {env_path}")
+            break
+    else:
+        print("[WARN] .env file not found, using default configuration")
+
+    # 设置SAML必需的环境变量（如果未设置）
+    saml_defaults = {
+        "SAML_SP_ENTITY_ID": "http://localhost:8080/api/v1/auth/sso/metadata",
+        "SAML_ACS_URL": "http://localhost:8080/api/v1/auth/sso/acs",
+        "SAML_SLS_URL": "http://localhost:8080/api/v1/auth/sso/sls",
+        "SAML_IDP_ENTITY_ID": "",
+        "SAML_IDP_SSO_URL": "",
+        "SAML_IDP_SLS_URL": "",
+        "SAML_STRICT": "false",
+        "SAML_DEBUG": "true",
+        # 添加测试证书（仅用于测试，不要在生产环境使用）
+        "SAML_SP_CERT": """-----BEGIN CERTIFICATE-----\nxxxx\n-----END CERTIFICATE-----""",
+        "SAML_SP_KEY": """-----BEGIN PRIVATE KEY-----\nxxxx\n----END PRIVATE KEY-----""",
+        "SAML_IDP_CERT": """""",
+    }
+
+    for key, value in saml_defaults.items():
+        if not os.environ.get(key):
+            os.environ[key] = value
+            print(f"[SET] Setting default environment variable: {key}")
 
     # 检查测试服务器是否运行
     if not wait_for_server(TEST_SERVER_URL):
-        pytest.fail(f"❌ 测试服务器未运行，请先启动后端服务: {TEST_SERVER_URL}")
+        pytest.fail(f"[ERROR] Test server is not running. Please start the backend service: {TEST_SERVER_URL}")
 
-    print("✅ 测试服务器连接成功")
+    print("[OK] Test server connection successful")
 
     yield
 
-    print("\n🧹 清理测试环境...")
+    print("\n[CLEAN] Cleaning up test environment...")
 
 
 @pytest.fixture(scope="function")
@@ -145,6 +186,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "tags: 标签相关测试")
     config.addinivalue_line("markers", "tag_service: 标签服务测试")
     config.addinivalue_line("markers", "image_tags: 图片标签测试")
+    config.addinivalue_line("markers", "sso: SSO单点登录测试")
     # 配置 pytest-asyncio
     config.addinivalue_line("markers", "asyncio: 异步测试标记")
 
