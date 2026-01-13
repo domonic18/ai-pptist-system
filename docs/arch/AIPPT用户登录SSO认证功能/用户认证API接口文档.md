@@ -36,16 +36,21 @@
 
 ### 1.2 接口列表
 
-| 序号 | 接口名称        | 方法   | 路径                     | 认证要求 |
-|------| --------------- | ------ | ------------------------ | -------- |
-| 1    | 用户注册        | POST   | `/register`              | 否       |
-| 2    | 用户登录        | POST   | `/login`                 | 否       |
-| 3    | 刷新访问令牌    | POST   | `/refresh`               | 否       |
-| 4    | 用户登出        | POST   | `/logout`                | 是       |
-| 5    | 获取当前用户    | GET    | `/me`                    | 是       |
-| 6    | 获取会话列表    | GET    | `/sessions`              | 是       |
-| 7    | 撤销指定会话    | POST   | `/sessions/{id}/revoke`  | 是       |
-| 8    | 登出所有设备    | POST   | `/logout-all`            | 是       |
+| 序号 | 接口名称          | 方法   | 路径                          | 认证要求 |
+|------| ----------------- | ------ | ----------------------------- | -------- |
+| 1    | 用户注册          | POST   | `/register`                   | 否       |
+| 2    | 用户登录          | POST   | `/login`                      | 否       |
+| 3    | 刷新访问令牌      | POST   | `/refresh`                    | 否       |
+| 4    | 用户登出          | POST   | `/logout`                     | 是       |
+| 5    | 获取当前用户      | GET    | `/me`                         | 是       |
+| 6    | 获取会话列表      | GET    | `/sessions`                   | 是       |
+| 7    | 撤销指定会话      | POST   | `/sessions/{id}/revoke`       | 是       |
+| 8    | 登出所有设备      | POST   | `/logout-all`                 | 是       |
+| 9    | 发起SSO登录       | POST   | `/sso/init`                   | 否       |
+| 10   | 处理SAML响应      | POST/GET | `/sso/acs`                 | 否       |
+| 11   | 发起单点登出      | POST   | `/sso/slo`                    | 是       |
+| 12   | 处理SLO响应       | GET    | `/sso/sls`                    | 否       |
+| 13   | 获取SP元数据      | GET    | `/sso/metadata`               | 否       |
 
 ---
 
@@ -437,6 +442,270 @@ Authorization: Bearer <access_token>
 
 ---
 
+### 3.5 发起SSO登录
+
+#### 3.5.1 接口信息
+
+- **接口名称**: 发起SSO登录
+- **接口路径**: `POST /api/v1/auth/sso/init`
+- **认证要求**: 否
+- **功能描述**: 生成SAML AuthNRequest并重定向到IdP进行单点登录
+
+#### 3.5.2 请求参数
+
+**请求体 (Body)**:
+
+```json
+{
+  "return_to": "http://localhost:3005/dashboard"
+}
+```
+
+| 字段      | 类型   | 必填 | 说明                       |
+| --------- | ------ | ---- | -------------------------- |
+| return_to | string | 否   | 登录成功后重定向URL |
+
+#### 3.5.3 响应示例
+
+**成功响应** (302 Found):
+
+```http
+HTTP/1.1 302 Found
+Location: https://guanghua.53jy.net/idp/login?SAMLRequest=...
+```
+
+#### 3.5.4 SSO登录流程
+
+```
+用户点击SSO登录
+    ↓
+前端调用 POST /api/v1/auth/sso/init
+    ↓
+后端生成SAML AuthNRequest
+    ↓
+后端返回302重定向到IdP
+    ↓
+用户在IdP完成认证
+    ↓
+IdP回调 POST /api/v1/auth/sso/acs
+    ↓
+后端验证SAML Response并生成JWT Token
+    ↓
+返回Token给前端
+```
+
+---
+
+### 3.6 处理SAML响应（ACS）
+
+#### 3.6.1 接口信息
+
+- **接口名称**: 处理SAML响应
+- **接口路径**: `POST /api/v1/auth/sso/acs` 或 `GET /api/v1/auth/sso/acs`
+- **认证要求**: 否（由IdP回调）
+- **功能描述**: 接收IdP的SAML Response并完成认证，返回JWT Token
+
+#### 3.6.2 请求参数
+
+此接口由IdP回调，包含SAML Response参数。
+
+**POST请求体**:
+
+SAML Response通过POST表单数据传递，格式为 `application/x-www-form-urlencoded`。
+
+#### 3.6.3 响应示例
+
+**成功响应** (200 OK):
+
+```json
+{
+  "status": "success",
+  "message": "SSO登录成功",
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "token_type": "bearer",
+    "expires_at": "2026-01-12T11:30:00Z",
+    "refresh_expires_at": "2026-02-11T10:30:00Z",
+    "user": {
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "email": "user@example.com",
+      "name": "张三",
+      "role": "USER",
+      "is_active": true,
+      "is_superuser": false,
+      "auth_type": "saml",
+      "avatar_url": null,
+      "bio": null,
+      "created_at": "2026-01-12T10:30:00Z",
+      "last_login_at": "2026-01-12T10:30:00Z"
+    }
+  },
+  "timestamp": "2026-01-12T10:30:00Z",
+  "request_id": "req_123456"
+}
+```
+
+**SAML验证失败** (401 Unauthorized):
+
+```json
+{
+  "status": "error",
+  "message": "SAML认证失败",
+  "error": {
+    "code": "SAML_VALIDATION_ERROR",
+    "message": "SAML Response签名验证失败",
+    "details": {
+      "errors": ["签名验证失败"]
+    }
+  },
+  "timestamp": "2026-01-12T10:30:00Z",
+  "request_id": "req_123456"
+}
+```
+
+#### 3.6.4 前端集成建议
+
+由于SAML回调通常通过POST方式传递数据，前端需要创建一个回调页面来处理响应：
+
+```typescript
+// frontend/src/pages/SSOCallback.vue
+<template>
+  <div>正在处理SSO登录...</div>
+</template>
+
+<script setup>
+import { onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+
+const router = useRouter();
+const authStore = useAuthStore();
+
+onMounted(() => {
+  // 从URL或postMessage获取Token
+  // 存储到store并跳转到首页
+});
+</script>
+```
+
+---
+
+### 3.7 发起单点登出（SLO）
+
+#### 3.7.1 接口信息
+
+- **接口名称**: 发起单点登出
+- **接口路径**: `POST /api/v1/auth/sso/slo`
+- **认证要求**: 是
+- **功能描述**: 生成SAML LogoutRequest并重定向到IdP进行单点登出
+
+#### 3.7.2 请求参数
+
+**请求头**:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+**请求体 (Body)**:
+
+```json
+{
+  "saml_name_id": "user@example.com",
+  "saml_session_index": "session-index-123"
+}
+```
+
+| 字段               | 类型   | 必填 | 说明                   |
+| ------------------ | ------ | ---- | ---------------------- |
+| saml_name_id       | string | 否   | SAML NameID            |
+| saml_session_index | string | 否   | SAML SessionIndex |
+
+#### 3.7.3 响应示例
+
+**成功响应** (302 Found):
+
+```http
+HTTP/1.1 302 Found
+Location: https://guanghua.53jy.net/idp/logout?SAMLRequest=...
+```
+
+---
+
+### 3.8 处理SLO响应
+
+#### 3.8.1 接口信息
+
+- **接口名称**: 处理SLO响应
+- **接口路径**: `GET /api/v1/auth/sso/sls`
+- **认证要求**: 否（由IdP回调）
+- **功能描述**: 接收IdP的SLO LogoutResponse并完成登出
+
+#### 3.8.2 响应示例
+
+**成功响应** (200 OK):
+
+```json
+{
+  "status": "success",
+  "message": "单点登出成功",
+  "data": null,
+  "timestamp": "2026-01-12T10:30:00Z",
+  "request_id": "req_123456"
+}
+```
+
+**SLO失败** (400 Bad Request):
+
+```json
+{
+  "status": "error",
+  "message": "单点登出失败",
+  "error": {
+    "code": "SLO_FAILED",
+    "message": "IdP登出响应验证失败"
+  },
+  "timestamp": "2026-01-12T10:30:00Z",
+  "request_id": "req_123456"
+}
+```
+
+---
+
+### 3.9 获取SP元数据
+
+#### 3.9.1 接口信息
+
+- **接口名称**: 获取SP元数据
+- **接口路径**: `GET /api/v1/auth/sso/metadata`
+- **认证要求**: 否
+- **功能描述**: 生成并返回Service Provider的SAML元数据XML，用于配置IdP
+
+#### 3.9.2 响应示例
+
+**成功响应** (200 OK):
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/xml
+Content-Disposition: attachment; filename="metadata.xml"
+
+<?xml version="1.0"?>
+<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" ...>
+  <!-- SP元数据内容 -->
+</md:EntityDescriptor>
+```
+
+#### 3.9.3 元数据配置步骤
+
+1. 调用此接口获取SP元数据XML
+2. 将元数据提供给IdP管理员
+3. IdP管理员配置信任关系
+4. 配置完成后即可进行SSO登录
+
+---
+
 ## 4. 会话管理接口
 
 ### 4.1 获取会话列表
@@ -680,7 +949,19 @@ Authorization: Bearer <access_token>
 | PASSWORD_MISMATCH        | 400       | 两次密码输入不一致         |
 | WEAK_PASSWORD            | 400       | 密码强度不足               |
 
-### 6.3 错误响应格式
+### 6.3 SAML SSO相关错误码
+
+| 错误码                      | HTTP状态码 | 说明                       |
+| ------------------------- | ---------- | -------------------------- |
+| SAML_VALIDATION_ERROR     | 401       | SAML验证失败               |
+| SAML_USER_CREATION_ERROR  | 500       | SAML用户创建失败           |
+| SAML_METADATA_ERROR       | 500       | SP元数据生成失败           |
+| SAML_CONFIG_ERROR         | 500       | SAML配置错误               |
+| SAML_RESPONSE_ERROR       | 400       | SAML响应处理错误           |
+| SAML_REQUEST_ERROR        | 400       | SAML请求处理错误           |
+| SLO_FAILED                | 400       | 单点登出失败               |
+
+### 6.4 错误响应格式
 
 所有错误响应遵循统一格式：
 
@@ -888,9 +1169,10 @@ async function logout() {
 
 ### 7.4 更新日志
 
-| 版本 | 日期       | 变更内容                                 |
-| ---- | --------- | ---------------------------------------- |
-| v1.0 | 2026-01-12 | 初始版本，包含所有用户认证相关接口文档 |
+| 版本 | 日期       | 变更内容                                             |
+| ---- | --------- | ---------------------------------------------------- |
+| v1.1 | 2026-01-13 | 新增SAML SSO相关接口文档（SSO登录、SLO、元数据等） |
+| v1.0 | 2026-01-12 | 初始版本，包含所有用户认证相关接口文档               |
 
 ---
 
