@@ -97,7 +97,9 @@ class SAMLConfigLoader:
             json.JSONDecodeError: JSON格式错误
         """
         if not file_path.exists():
-            raise FileNotFoundError(f"SAML配置文件不存在: {file_path}")
+            logger.warning(f"SAML配置文件不存在: {file_path}，使用默认配置")
+            # 返回空配置，将由环境变量填充
+            return {}
 
         with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -113,14 +115,61 @@ class SAMLConfigLoader:
             SAML基础配置字典，已替换环境变量
 
         Raises:
-            FileNotFoundError: 配置文件不存在
+            FileNotFoundError: 配置文件不存在（已改为警告）
         """
         if use_cache and self._settings_cache is not None:
             return self._settings_cache
 
-        raw_config = self._load_json_file(self.settings_file)
+        try:
+            raw_config = self._load_json_file(self.settings_file)
+        except Exception as e:
+            logger.warning(f"加载SAML配置文件失败: {e}，使用默认配置")
+            raw_config = {}
+
+        # 如果配置文件为空，使用环境变量构建默认配置
+        if not raw_config:
+            raw_config = self._build_default_config()
+
         self._settings_cache = self._replace_env_variables(raw_config)
         return self._settings_cache
+
+    def _build_default_config(self) -> Dict[str, Any]:
+        """
+        从环境变量构建默认SAML配置
+
+        Returns:
+            SAML配置字典
+        """
+        return {
+            "strict": os.environ.get("SAML_STRICT", "false").lower() == "true",
+            "debug": os.environ.get("SAML_DEBUG", "true").lower() == "true",
+            "sp": {
+                "entityId": "${SAML_SP_ENTITY_ID}",
+                "assertionConsumerService": {
+                    "url": "${SAML_ACS_URL}",
+                    "binding": "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+                },
+                "singleLogoutService": {
+                    "url": "${SAML_SLS_URL}",
+                    "binding": "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+                },
+                "NameIDFormat": "urn:oasis:names:tc:SAML:2.0:nameid-format:transient",
+                "x509cert": "${SAML_SP_CERT}",
+                "privateKey": "${SAML_SP_KEY}"
+            },
+            "idp": {
+                "entityId": "${SAML_IDP_ENTITY_ID}",
+                "singleSignOnService": {
+                    "url": "${SAML_IDP_SSO_URL}",
+                    "binding": "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+                },
+                "singleLogoutService": {
+                    "url": "${SAML_IDP_SLS_URL}",
+                    "binding": "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+                },
+                "x509cert": "${SAML_IDP_CERT}"
+            }
+        }
 
     def load_advanced_settings(self, use_cache: bool = True) -> Dict[str, Any]:
         """

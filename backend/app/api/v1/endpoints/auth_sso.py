@@ -1,0 +1,303 @@
+"""
+SAML SSO 认证 API 端点
+处理SSO登录、登出、元数据等API
+"""
+
+from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import RedirectResponse, JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.database import get_db
+from app.services.auth.saml_auth_service import SAMLAuthService
+from app.schemas.auth_sso import SSOInitRequest, SSOLogoutRequest
+from app.schemas.auth import UserResponse
+from app.schemas.common import StandardResponse
+from app.core.middleware.auth import get_current_user
+from app.core.auth.jwt_handler import jwt_handler
+from app.core.exceptions.saml import SAMLValidationError, SAMLMetadataError
+from app.core.log_utils import get_logger
+
+logger = get_logger(__name__)
+
+router = APIRouter(prefix="/auth/sso", tags=["SSO认证"])
+
+
+@router.post(
+    "/init",
+    response_model=StandardResponse,
+    summary="发起SSO登录",
+    description="生成SAML AuthNRequest并重定向到IdP"
+)
+async def initiate_sso(
+    request: Request,
+    req_body: SSOInitRequest = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    发起SSO登录
+
+    Args:
+        request: FastAPI Request对象
+        req_body: SSO初始化请求（包含可选的return_to参数）
+        db: 数据库会话
+
+    Returns:
+        重定向到IdP登录页面
+    """
+    saml_service = SAMLAuthService(db)
+
+    # 获取return_to参数
+    return_to = None
+    if req_body:
+        return_to = req_body.return_to
+
+    # 生成IdP登录URL
+    idp_login_url = await saml_service.initiate_sso_login(
+        request=request,
+        return_to=return_to
+    )
+
+    # 重定向到IdP
+    return RedirectResponse(url=idp_login_url, status_code=302)
+
+
+@router.post(
+    "/acs",
+    summary="处理SAML响应",
+    description="接收IdP的SAML Response并完成认证"
+)
+@router.get(
+    "/acs",
+    summary="处理SAML响应（GET）",
+    description="接收IdP的SAML Response并完成认证（GET方法）"
+)
+async def handle_acs(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    处理SAML ACS (Assertion Consumer Service) 响应
+
+    Args:
+        request: FastAPI Request对象（包含SAML Response）
+        db: 数据库会话
+
+    Returns:
+        包含Token的JSON响应（前端需要处理）
+    """
+    # 获取客户端信息
+    user_agent = request.headers.get("user-agent")
+    ip_address = request.client.host
+
+    saml_service = SAMLAuthService(db)
+
+    try:
+        # 处理SAML响应并完成认证
+        result = await saml_service.process_acs_response(
+            request=request,
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+
+        # 构建响应
+        user_response = UserResponse.model_validate(result["user"])
+
+        sso_response = {
+            "access_token": result["access_token"],
+            "refresh_token": result["refresh_token"],
+            "token_type": "bearer",
+            "expires_at": result["expires_at"].isoformat() if result["expires_at"] else None,
+            "refresh_expires_at": result["refresh_expires_at"].isoformat() if result["refresh_expires_at"] else None,
+            "user": user_response.model_dump()
+        }
+
+        # 返回JSON响应（前端JavaScript需要处理）
+        # 注意：由于这是SAML回调，可能需要通过HTML页面返回
+        return JSONResponse(
+            content={
+                "status": "success",
+                "message": "SSO登录成功",
+                "data": sso_response
+            }
+        )
+
+    except SAMLValidationError as e:
+        logger.error(f"SSO ACS处理失败: {str(e)}")
+        return JSONResponse(
+            status_code=401,
+            content={
+                "status": "error",
+                "message": e.message,
+                "data": {"details": e.details}
+            }
+        )
+    except Exception as e:
+        logger.error(f"SSO ACS处理时发生未知错误: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": f"SSO认证失败: {str(e)}",
+                "data": None
+            }
+        )
+
+
+@router.post(
+    "/slo",
+    summary="发起单点登出",
+    description="生成SAML LogoutRequest并重定向到IdP"
+)
+async def initiate_slo(
+    request: Request,
+    req_body: SSOLogoutRequest = None,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    发起单点登出
+
+    Args:
+        request: FastAPI Request对象
+        req_body: SLO请求
+        current_user: 当前登录用户
+        db: 数据库会话
+
+    Returns:
+        重定向到IdP登出页面
+    """
+    saml_service = SAMLAuthService(db)
+
+    # 撤销本地会话
+    try:
+        authorization = request.headers.get("authorization")
+        if authorization:
+            token = authorization.replace("Bearer ", "")
+            token_jti = jwt_handler.get_token_jti(token)
+
+            from app.services.auth.auth_service import AuthService
+            auth_service = AuthService(db)
+            await auth_service.logout(token_jti, current_user["id"])
+    except Exception as e:
+        logger.warning(f"撤销本地会话失败: {str(e)}")
+
+    # 获取用户的SAML信息
+    saml_name_id = None
+    saml_session_index = None
+    if req_body:
+        saml_name_id = req_body.saml_name_id
+        saml_session_index = req_body.saml_session_index
+
+    # 生成IdP登出URL
+    idp_logout_url = await saml_service.initiate_slo(
+        request=request,
+        saml_name_id=saml_name_id,
+        saml_session_index=saml_session_index
+    )
+
+    # 重定向到IdP
+    return RedirectResponse(url=idp_logout_url, status_code=302)
+
+
+@router.get(
+    "/sls",
+    summary="处理SLO响应",
+    description="接收IdP的SLO响应并完成登出"
+)
+async def handle_sls(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    处理SAML SLS (Single Logout Service) 响应
+
+    Args:
+        request: FastAPI Request对象（包含SAML LogoutResponse）
+        db: 数据库会话
+
+    Returns:
+        登出成功响应
+    """
+    saml_service = SAMLAuthService(db)
+
+    # 定义会话删除回调
+    def delete_session_callback():
+        # 这里可以添加额外的会话清理逻辑
+        pass
+
+    # 处理SLO响应
+    success = await saml_service.process_slo_response(
+        request=request,
+        delete_session_cb=delete_session_callback
+    )
+
+    if success:
+        return JSONResponse(
+            content={
+                "status": "success",
+                "message": "单点登出成功",
+                "data": None
+            }
+        )
+    else:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": "error",
+                "message": "单点登出失败",
+                "data": None
+            }
+        )
+
+
+@router.get(
+    "/metadata",
+    response_class=JSONResponse,
+    summary="获取SP元数据",
+    description="生成并返回Service Provider的SAML元数据XML"
+)
+async def get_metadata(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    获取SP元数据
+
+    Args:
+        db: 数据库会话
+
+    Returns:
+        SP元数据XML
+    """
+    saml_service = SAMLAuthService(db)
+
+    try:
+        metadata_xml = saml_service.get_sp_metadata()
+
+        # 返回XML响应
+        return Response(
+            content=metadata_xml,
+            media_type="application/xml",
+            headers={
+                "Content-Disposition": 'attachment; filename="metadata.xml"'
+            }
+        )
+    except SAMLMetadataError as e:
+        logger.error(f"生成SP元数据失败: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": e.message,
+                "data": {"details": e.details}
+            }
+        )
+    except Exception as e:
+        logger.error(f"生成SP元数据时发生未知错误: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": f"生成元数据失败: {str(e)}",
+                "data": None
+            }
+        )
