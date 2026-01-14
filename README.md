@@ -71,7 +71,7 @@ uvicorn app.main:app --reload --port 8000
 celery-Aapp.services.tasks.celery_appworker--loglevel=info--concurrency=4-Qbanana,quick,batch,maintenance,image_parsing,image_editing,default
 
 # 如果是windows:
-# celery -A app.services.tasks.celery_app worker --loglevel=info -c 4 -P eventlet -Q banana,quick,batch,maintenance,image_parsing,image_editing,default
+# celery -A app.tasks.celery_app worker --loglevel=info -c 4 -P eventlet -Q banana,quick,batch,maintenance,image_parsing,image_editing,default
 ```
 
 ### 第四步：启动前端服务
@@ -117,8 +117,13 @@ SECRET_KEY=your_secret_key
 
 **注意**：大模型的API-KEY和BASE_URL配置已改为在前端页面进行配置，无需在环境变量中设置。
 
-
 # 📚 功能列表
+
+## 用户认证功能
+
+- **用户注册/登录**：支持邮箱密码注册和登录，自动JWT Token管理
+- **SSO快捷登录**：集成SAML 2.0协议，支持企业级单点登录（SSO），自动用户创建和身份映射
+- **单点登出**：支持单设备登出
 
 ## AI智能生成功能
 - **智能大纲生成**：基于主题自动生成PPT内容大纲，支持流式输出实时预览
@@ -148,7 +153,6 @@ SECRET_KEY=your_secret_key
 - **模型切换**：灵活切换不同的AI模型进行生成
 - **默认模型设置**：设置默认使用的对话和图片生成模型
 
-
 # 🎯 开发
 
 ## 技术栈
@@ -176,7 +180,6 @@ SECRET_KEY=your_secret_key
 - [系统架构设计](docs/arch/系统架构设计.md)
 - [AI PPT功能说明](docs/archive/AIPPT.md)
 - [开发规范](docs/standard/README.md) - 包含API设计、响应格式、日志记录、测试规范等完整规范体系
-
 
 # 📄 版权声明/开源协议
 
