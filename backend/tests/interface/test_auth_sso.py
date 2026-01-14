@@ -70,9 +70,12 @@ class TestSSOEndpoints:
         # 不设置return_to，让后端使用默认配置
         response = client.post("/api/v1/auth/sso/init", json={})
 
-        # 应该返回302重定向到IdP
-        # 或404（如果IdP回调失败，这是预期的）
-        assert response.status_code in [302, 404, 500]
+        # 应该返回200和JSON响应（包含IdP重定向URL）
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert "redirect_url" in data["data"]
+        assert "guanghua.53jy.net" in data["data"]["redirect_url"]
 
     def test_sso_initiate_login_without_return_to(self, client):
         """测试发起SSO登录（不指定return_to）
@@ -83,9 +86,11 @@ class TestSSOEndpoints:
         # 不指定return_to参数
         response = client.post("/api/v1/auth/sso/init", json={})
 
-        # 应该返回302重定向到IdP
-        # 或404（如果IdP回调失败，这是预期的）
-        assert response.status_code in [302, 404, 500]
+        # 应该返回200和JSON响应
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert "redirect_url" in data["data"]
 
     def test_sso_initiate_login_empty_body(self, client):
         """测试发起SSO登录（空请求体）
@@ -96,8 +101,11 @@ class TestSSOEndpoints:
         # 空JSON对象
         response = client.post("/api/v1/auth/sso/init", json={})
 
-        # 应该正常处理（return_to是可选的）
-        assert response.status_code in [302, 404, 500]
+        # 应该返回200（return_to是可选的）
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert "redirect_url" in data["data"]
 
 
 @pytest.mark.integration
@@ -119,17 +127,25 @@ class TestSSOACSEndpoints:
         # GET方法应该被支持
         response = client.get("/api/v1/auth/sso/acs")
 
-        # 由于没有有效的SAML响应，会返回错误
-        # 但端点应该可访问
-        assert response.status_code in [400, 401, 500]
+        # 由于没有有效的SAML响应，会返回错误或HTML
+        # 但端点应该可访问，返回HTML或JSON错误
+        assert response.status_code in [200, 400, 401, 500]
+        # HTML响应会有text/html content type
+        if response.status_code == 200:
+            content_type = response.headers.get("content-type", "")
+            assert "text/html" in content_type or "application/json" in content_type
 
     def test_sso_acs_post_method_without_saml_data(self, client):
         """测试ACS端点（POST方法，无SAML数据）"""
         # POST方法但没有SAML响应数据
         response = client.post("/api/v1/auth/sso/acs", data={})
 
-        # 应该返回错误（缺少SAML响应）
-        assert response.status_code in [400, 401, 500]
+        # 应该返回错误（缺少SAML响应）或HTML错误页面
+        assert response.status_code in [200, 400, 401, 500]
+        # HTML响应会有text/html content type
+        if response.status_code == 200:
+            content_type = response.headers.get("content-type", "")
+            assert "text/html" in content_type or "application/json" in content_type
 
     @pytest.mark.skip(reason="需要Mock完整的SAML响应处理流程")
     def test_sso_acs_with_valid_saml_response(self, client):
@@ -418,9 +434,11 @@ class TestSSOSecurity:
         # SSO发起应该是公开的端点
         response = client.post("/api/v1/auth/sso/init", json={})
 
-        # 应该返回302重定向到IdP
-        # 或404（如果IdP回调失败，这是预期的）
-        assert response.status_code in [302, 404, 500]
+        # 应该返回200和JSON响应（包含IdP重定向URL）
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert "redirect_url" in data["data"]
 
     @pytest.mark.skip(reason="需要配置测试环境的安全设置")
     def test_sso_acs_validates_saml_signature(self, client):

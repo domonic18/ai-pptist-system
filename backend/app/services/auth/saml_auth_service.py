@@ -35,9 +35,9 @@ class SAMLAuthService:
         self.session_repo = UserSessionRepository(db)
         self.login_history_repo = LoginHistoryRepository(db)
 
-    def _prepare_request_dict(self, request: Request) -> Dict[str, Any]:
+    async def _prepare_request_dict(self, request: Request) -> Dict[str, Any]:
         """
-        准备SAML请求字典
+        准备SAML请求字典（异步版本）
 
         Args:
             request: FastAPI Request对象
@@ -54,18 +54,14 @@ class SAMLAuthService:
             # SAML Response通常在POST表单数据中
             content_type = request.headers.get("content-type", "")
             if "application/x-www-form-urlencoded" in content_type:
-                # 需要从request body中读取表单数据
-                import asyncio
-                async def get_form_data():
+                # 在异步上下文中正确获取表单数据
+                try:
                     body = await request.body()
                     from urllib.parse import parse_qs
-                    return parse_qs(body.decode('utf-8'))
-
-                # 在异步上下文中获取表单数据
-                try:
-                    form_data = asyncio.get_event_loop().run_until_complete(get_form_data())
+                    form_data = parse_qs(body.decode('utf-8'))
                     post_data = {k: v[0] if v else '' for k, v in form_data.items()}
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"获取POST表单数据失败: {e}")
                     post_data = {}
 
         return {
@@ -78,9 +74,9 @@ class SAMLAuthService:
             'request_uri': str(url),
         }
 
-    def init_saml_auth(self, request: Request) -> OneLogin_Saml2_Auth:
+    async def init_saml_auth(self, request: Request) -> OneLogin_Saml2_Auth:
         """
-        初始化SAML认证对象
+        初始化SAML认证对象（异步版本）
 
         Args:
             request: FastAPI Request对象
@@ -88,7 +84,7 @@ class SAMLAuthService:
         Returns:
             OneLogin_Saml2_Auth实例
         """
-        req_dict = self._prepare_request_dict(request)
+        req_dict = await self._prepare_request_dict(request)
 
         # 使用SAML配置加载器加载完整配置
         saml_settings_dict = saml_settings.load_saml_config()
@@ -110,7 +106,7 @@ class SAMLAuthService:
         Returns:
             IdP登录URL
         """
-        auth = self.init_saml_auth(request)
+        auth = await self.init_saml_auth(request)
 
         # 生成登录URL
         login_url = auth.login(return_to=return_to)
@@ -144,7 +140,9 @@ class SAMLAuthService:
         Raises:
             SAMLValidationError: SAML验证失败
         """
-        auth = self.init_saml_auth(request)
+        logger.info("[SSO-ACS-START] 开始处理SAML ACS响应")
+
+        auth = await self.init_saml_auth(request)
 
         # 验证SAML Response
         request_id = None  # TODO: 从Redis或数据库获取之前存储的request_id
@@ -154,7 +152,7 @@ class SAMLAuthService:
         errors = auth.get_errors()
         if errors:
             error_reason = auth.get_last_error_reason()
-            logger.error(f"SAML验证失败: {errors}, 原因: {error_reason}")
+            logger.error(f"[SSO-ACS-ERROR] SAML验证失败 - errors: {errors}, reason: {error_reason}")
 
             # 记录失败的登录尝试
             await self.login_history_repo.create_login_record(
@@ -172,7 +170,7 @@ class SAMLAuthService:
 
         # 检查是否认证成功
         if not auth.is_authenticated():
-            logger.error("SAML认证失败: 未通过身份验证")
+            logger.error("[SSO-ACS-ERROR] SAML认证失败: 未通过身份验证")
             raise SAMLValidationError(
                 message="SAML身份验证失败",
                 details={"reason": "未通过身份验证"}
@@ -183,14 +181,17 @@ class SAMLAuthService:
         saml_session_index = auth.get_session_index()
         saml_attributes = auth.get_attributes()
 
-        logger.info(f"SAML用户认证成功: NameID={saml_name_id}")
-        logger.debug(f"SAML Attributes: {saml_attributes}")
+        logger.info(f"[SSO-ACS-SUCCESS] SAML用户认证成功 - NameID: {saml_name_id}")
+        logger.debug(f"[SSO-ACS-ATTRIBUTES] SAML属性: {saml_attributes}")
 
         # 从SAML属性中提取用户信息
         user_email = self._extract_email(saml_attributes, saml_name_id)
         user_name = self._extract_name(saml_attributes, saml_name_id)
 
+        logger.info(f"[SSO-ACS-USER-INFO] 提取用户信息 - email: {user_email}, name: {user_name}")
+
         # 查找或创建用户
+        logger.info(f"[SSO-ACS-GET-USER] 开始获取或创建SSO用户 - email: {user_email}")
         user = await self._get_or_create_sso_user(
             email=user_email,
             name=user_name,
@@ -198,8 +199,10 @@ class SAMLAuthService:
             saml_session_index=saml_session_index,
             saml_attributes=saml_attributes
         )
+        logger.info(f"[SSO-ACS-USER-DONE] 用户处理完成 - user_id: {user.id}, email: {user.email}, auth_type: {user.auth_type}")
 
         # 创建JWT Token
+        logger.info(f"[SSO-ACS-TOKEN-START] 开始创建JWT Token - user_id: {user.id}")
         token_data = jwt_handler.create_token_pair(
             user_id=user.id,
             additional_claims={
@@ -207,8 +210,10 @@ class SAMLAuthService:
                 "role": user.role
             }
         )
+        logger.info(f"[SSO-ACS-TOKEN-DONE] JWT Token创建成功 - access_jti: {token_data.get('access_jti')}, refresh_jti: {token_data.get('refresh_jti')}")
 
         # 创建会话记录
+        logger.info(f"[SSO-ACS-SESSION-START] 开始创建会话记录")
         await self.session_repo.create_session(
             user_id=user.id,
             token_jti=token_data["access_jti"],
@@ -218,6 +223,7 @@ class SAMLAuthService:
             user_agent=user_agent,
             ip_address=ip_address
         )
+        logger.info(f"[SSO-ACS-SESSION-DONE] 会话记录创建成功")
 
         # 记录成功的登录
         await self.login_history_repo.create_login_record(
@@ -229,7 +235,7 @@ class SAMLAuthService:
             user_agent=user_agent
         )
 
-        logger.info(f"SSO用户登录成功: {user.email}")
+        logger.info(f"[SSO-ACS-COMPLETE] SSO用户登录成功 - email: {user.email}, user_id: {user.id}")
 
         return {
             "user": user,
@@ -381,7 +387,7 @@ class SAMLAuthService:
         Returns:
             IdP登出URL
         """
-        auth = self.init_saml_auth(request)
+        auth = await self.init_saml_auth(request)
 
         # 生成登出URL
         logout_url = auth.logout(
@@ -407,7 +413,7 @@ class SAMLAuthService:
         Returns:
             是否处理成功
         """
-        auth = self.init_saml_auth(request)
+        auth = await self.init_saml_auth(request)
 
         # 处理SLO响应
         url = auth.process_slo(delete_session_cb=delete_session_cb)

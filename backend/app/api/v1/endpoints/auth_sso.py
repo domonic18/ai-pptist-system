@@ -4,7 +4,7 @@ SAML SSO 认证 API 端点
 """
 
 from fastapi import APIRouter, Depends, Request, Response
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
@@ -16,6 +16,7 @@ from app.core.middleware.auth import get_current_user
 from app.core.auth.jwt_handler import jwt_handler
 from app.core.exceptions.saml import SAMLValidationError, SAMLMetadataError
 from app.core.log_utils import get_logger
+import json
 
 logger = get_logger(__name__)
 
@@ -26,7 +27,7 @@ router = APIRouter(prefix="/auth/sso", tags=["SSO认证"])
     "/init",
     response_model=StandardResponse,
     summary="发起SSO登录",
-    description="生成SAML AuthNRequest并重定向到IdP"
+    description="生成SAML AuthNRequest并返回IdP登录URL"
 )
 async def initiate_sso(
     request: Request,
@@ -42,7 +43,7 @@ async def initiate_sso(
         db: 数据库会话
 
     Returns:
-        重定向到IdP登录页面
+        JSON响应，包含IdP登录URL，前端需要使用window.location.href跳转
     """
     saml_service = SAMLAuthService(db)
 
@@ -57,8 +58,18 @@ async def initiate_sso(
         return_to=return_to
     )
 
-    # 重定向到IdP
-    return RedirectResponse(url=idp_login_url, status_code=302)
+    logger.info(f"生成IdP登录URL: {idp_login_url}")
+
+    # 返回JSON响应（不使用302重定向，避免CORS问题）
+    return JSONResponse(
+        content={
+            "status": "success",
+            "message": "SSO登录URL生成成功",
+            "data": {
+                "redirect_url": idp_login_url
+            }
+        }
+    )
 
 
 @router.post(
@@ -89,6 +100,34 @@ async def handle_acs(
     user_agent = request.headers.get("user-agent")
     ip_address = request.client.host
 
+    logger.info(f"[SSO-ACS-API] 收到ACS请求 - method: {request.method}, ip: {ip_address}, user_agent: {user_agent}")
+    logger.info(f"[SSO-ACS-API] 请求URL: {request.url}")
+    logger.info(f"[SSO-ACS-API] 查询参数: {dict(request.query_params)}")
+
+    # 预先读取body（避免重复读取）
+    body_data = None
+    relay_state = None
+
+    # 记录POST数据（如果有的话）并获取RelayState
+    if request.method == "POST":
+        try:
+            body_data = await request.body()
+            logger.info(f"[SSO-ACS-API] POST body长度: {len(body_data)} bytes")
+            # 不记录完整的SAML Response，只记录关键字段
+            if b"SAMLResponse" in body_data:
+                logger.info("[SSO-ACS-API] 检测到SAMLResponse字段")
+            if b"RelayState" in body_data:
+                logger.info("[SSO-ACS-API] 检测到RelayState字段")
+                # 提取RelayState
+                from urllib.parse import parse_qs
+                post_data = parse_qs(body_data.decode('utf-8'))
+                relay_state = post_data.get('RelayState', [None])[0]
+        except Exception as e:
+            logger.warning(f"[SSO-ACS-API] 读取body失败: {e}")
+    else:
+        # GET方法从查询参数获取RelayState
+        relay_state = request.query_params.get('RelayState')
+
     saml_service = SAMLAuthService(db)
 
     try:
@@ -99,27 +138,52 @@ async def handle_acs(
             user_agent=user_agent
         )
 
+        logger.info(f"[SSO-ACS-API] 构建响应 - user_id: {result['user'].id}")
+
         # 构建响应
         user_response = UserResponse.model_validate(result["user"])
 
+        # 使用model_dump(mode='json')来正确序列化datetime
         sso_response = {
             "access_token": result["access_token"],
             "refresh_token": result["refresh_token"],
             "token_type": "bearer",
             "expires_at": result["expires_at"].isoformat() if result["expires_at"] else None,
             "refresh_expires_at": result["refresh_expires_at"].isoformat() if result["refresh_expires_at"] else None,
-            "user": user_response.model_dump()
+            "user": user_response.model_dump(mode='json')  # 使用json模式序列化datetime
         }
 
-        # 返回JSON响应（前端JavaScript需要处理）
-        # 注意：由于这是SAML回调，可能需要通过HTML页面返回
-        return JSONResponse(
-            content={
-                "status": "success",
-                "message": "SSO登录成功",
-                "data": sso_response
-            }
-        )
+        logger.info(f"[SSO-ACS-API] 响应构建完成，准备返回")
+
+        # 如果RelayState存在，使用它作为重定向目标
+        redirect_url = relay_state if relay_state else "/"
+
+        logger.info(f"[SSO-ACS-API] 准备重定向到: {redirect_url}")
+
+        # 使用URL参数传递token（最可靠的方式，避免跨域localStorage问题）
+        from urllib.parse import urlencode, urlparse, urlunparse
+
+        # 将token添加到重定向URL的查询参数中
+        parsed_url = urlparse(redirect_url)
+        query_params = {
+            'access_token': sso_response['access_token'],
+            'refresh_token': sso_response['refresh_token'],
+        }
+
+        # 合并现有的查询参数（如redirect）
+        from urllib.parse import parse_qs
+        existing_params = parse_qs(parsed_url.query)
+        for key, values in existing_params.items():
+            if key not in query_params:
+                query_params[key] = values[0]
+
+        new_query = urlencode(query_params)
+        final_redirect_url = urlunparse(parsed_url._replace(query=new_query))
+
+        logger.info(f"[SSO-ACS-API] 最终重定向URL长度: {len(final_redirect_url)}")
+
+        # 直接重定向（不使用HTML，避免localStorage跨域问题）
+        return RedirectResponse(url=final_redirect_url, status_code=302)
 
     except SAMLValidationError as e:
         logger.error(f"SSO ACS处理失败: {str(e)}")

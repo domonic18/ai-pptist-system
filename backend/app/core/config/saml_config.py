@@ -9,7 +9,10 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
-from app.utils.config_utils import get_backend_path, get_config_path
+from app.utils.config_utils import get_backend_path, get_config_path, get_project_root
+from app.core.log_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 class SAMLConfigLoader:
@@ -36,6 +39,38 @@ class SAMLConfigLoader:
         # 缓存加载的配置
         self._settings_cache: Optional[Dict[str, Any]] = None
         self._advanced_settings_cache: Optional[Dict[str, Any]] = None
+
+        # 加载环境变量文件（确保SAML环境变量可用）
+        self._load_env_variables()
+
+    def _load_env_variables(self):
+        """加载环境变量文件"""
+        # 尝试从多个位置加载环境文件
+        env_paths = [
+            get_config_path(".env"),  # config/.env
+            get_project_root() / ".env",  # 项目根目录/.env
+            get_backend_path() / ".env",  # backend/.env
+        ]
+
+        for env_path in env_paths:
+            if env_path.exists():
+                logger.info(f"加载环境变量文件: {env_path}")
+                try:
+                    with open(env_path, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line or line.startswith("#"):
+                                continue
+                            if "=" in line:
+                                key, value = line.split("=", 1)
+                                # 只加载SAML相关的环境变量
+                                if key.startswith("SAML_"):
+                                    if key not in os.environ:
+                                        os.environ[key] = value.strip()
+                                        logger.debug(f"加载环境变量: {key}")
+                except Exception as e:
+                    logger.warning(f"加载环境变量文件失败 {env_path}: {e}")
+                break  # 找到一个文件就停止
 
     def _replace_env_variables(self, config: Any) -> Any:
         """

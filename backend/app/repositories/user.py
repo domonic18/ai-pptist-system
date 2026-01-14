@@ -68,8 +68,20 @@ class UserRepository(BaseRepository):
         role: str = 'USER'
     ) -> User:
         """创建 SSO 用户（无密码）"""
-        import uuid
-        random_password = uuid.uuid4().hex  # 生成随机密码（不会被使用）
+        import secrets
+        import string
+
+        # 生成符合所有密码策略的随机密码（不会被实际使用）
+        # 包含大小写字母、数字和特殊字符
+        chars = (
+            string.ascii_uppercase +  # 大写字母
+            string.ascii_lowercase +  # 小写字母
+            string.digits +           # 数字
+            "!@#$%^&*"               # 特殊字符
+        )
+        random_password = ''.join(secrets.choice(chars) for _ in range(32))
+
+        logger.info(f"[SSO-USER-CREATE] 创建SSO用户 - email: {email}, name: {name}, saml_name_id: {saml_name_id}")
 
         return await self.create(
             email=email,
