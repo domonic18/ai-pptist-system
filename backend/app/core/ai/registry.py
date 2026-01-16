@@ -41,8 +41,18 @@ def register_all_providers():
     except ImportError as e:
         logger.warning(f"通义千问 Provider注册失败: {e}")
     
-    # 火山引擎Provider已移除
-    
+    # ===== 火山引擎豆包 =====
+    try:
+        from .providers.volcengine.chat import VolcengineChatProvider
+        from .providers.volcengine.image import VolcengineImageProvider
+
+        AIProviderFactory.register(ModelCapability.CHAT, "volcengine", VolcengineChatProvider)
+        AIProviderFactory.register(ModelCapability.IMAGE_GEN, "volcengine", VolcengineImageProvider)
+
+        logger.info("火山引擎豆包 Provider注册完成")
+    except ImportError as e:
+        logger.warning(f"火山引擎豆包 Provider注册失败: {e}")
+
     # ===== GenAI (Google) =====
     try:
         from .providers.genai.image import GenAIProvider
