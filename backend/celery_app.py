@@ -17,8 +17,10 @@ from celery import Celery
 from celery.signals import worker_init
 from kombu import Queue
 from app.core.config import settings
-from app.core.log_utils import get_logger
+from app.core.log_utils import setup_logging, get_logger
 
+# 初始化日志系统（必须在 import 其他模块之前）
+setup_logging()
 logger = get_logger(__name__)
 
 # 创建Celery应用
@@ -66,9 +68,11 @@ celery_app.conf.update(
     task_ignore_result=False,  # 保存结果
     task_store_eager_result=False,  # 避免重复计算
 
-    # 重试配置
+    # 任务执行和重试配置
     task_acks_late=True,  # 任务确认延迟
     worker_prefetch_multiplier=1,  # 工作者预取因子
+    task_reject_on_worker_lost=True,  # Worker丢失时拒绝任务
+    task_send_sent_event=True,  # 发送任务事件（修复 Windows 兼容性）
 
     # 路由配置
     task_routes={
