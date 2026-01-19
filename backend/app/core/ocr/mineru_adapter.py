@@ -455,6 +455,7 @@ class MinerUAdapter:
             try:
                 with zip_file.open(content_list_file) as f:
                     content_list = json.load(f)
+
             except Exception as e:
                 logger.error(
                     "解析content_list文件失败",
@@ -773,6 +774,18 @@ class MinerUAdapter:
                     "text": item.get("text", ""),
                     "bbox": bbox_dict,
                     "type": item_type
+                })
+            elif item_type == "list" and item.get("sub_type") == "text":
+                # 列表类型文字区域（包含多个列表项）
+                list_items = item.get("list_items", [])
+                # 将列表项合并为一个字符串，用换行符分隔
+                combined_text = "\n".join(list_items) if list_items else ""
+                text_regions.append({
+                    "text": combined_text,
+                    "bbox": bbox_dict,
+                    "type": "list",
+                    "sub_type": "text",
+                    "list_items": list_items  # 保留原始列表项
                 })
             elif item_type == "image":
                 # 图片/装饰元素
