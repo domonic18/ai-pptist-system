@@ -3,6 +3,7 @@ MinerU + 多模态混合识别服务
 MinerU提供精确坐标，多模态大模型提供样式信息
 """
 
+import time
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 import asyncio
@@ -68,10 +69,10 @@ class MinerUMultimodalFusionService:
         Returns:
             HybridOCRResult: 融合识别结果
         """
-        start_time = datetime.now()
+        overall_start = time.perf_counter()
 
         logger.info(
-            "开始MinerU+多模态混合识别",
+            "[OCR流程] 开始混合OCR识别",
             extra={
                 "task_id": task_id,
                 "slide_id": slide_id,
@@ -81,37 +82,72 @@ class MinerUMultimodalFusionService:
             }
         )
 
+        # 子步骤计时
+        mineru_time = 0
+        multimodal_time = 0
+        merge_time = 0
+
         try:
-            # 步骤1: 并行执行MinerU和多模态识别
-            mineru_task = self._recognize_with_mineru(
+            # 步骤1: MinerU识别（获取精确坐标和装饰元素）
+            mineru_start = time.perf_counter()
+            mineru_result = await self._recognize_with_mineru(
                 cos_key,
                 user_id,
                 enable_formula,
                 enable_table
             )
+            mineru_time = (time.perf_counter() - mineru_start) * 1000
 
-            multimodal_task = self._recognize_with_multimodal(
-                cos_key
-            ) if enable_style_recognition else None
+            logger.info(
+                "[OCR流程] MinerU识别完成",
+                extra={
+                    "task_id": task_id,
+                    "mineru_time_ms": round(mineru_time, 2),
+                    "text_count": len(mineru_result.get("text_regions", [])),
+                    "image_count": len(mineru_result.get("image_regions", []))
+                }
+            )
 
-            # 等待MinerU完成
-            mineru_result = await mineru_task
-
-            # 如果启用样式识别，等待多模态完成
+            # 步骤2: 多模态识别（获取样式信息）
             multimodal_result = None
-            if enable_style_recognition and multimodal_task:
-                multimodal_result = await multimodal_task
+            if enable_style_recognition:
+                multimodal_start = time.perf_counter()
+                multimodal_result = await self._recognize_with_multimodal(cos_key)
+                multimodal_time = (time.perf_counter() - multimodal_start) * 1000
 
-            # 步骤2: 融合结果
-            merge_start = datetime.now()
+                logger.info(
+                    "[OCR流程] 多模态OCR识别完成",
+                    extra={
+                        "task_id": task_id,
+                        "multimodal_time_ms": round(multimodal_time, 2),
+                        "model": multimodal_result.get("model", "unknown")
+                    }
+                )
+            else:
+                logger.info(
+                    "[OCR流程] 跳过多模态OCR识别（未启用样式识别）",
+                    extra={"task_id": task_id}
+                )
+
+            # 步骤3: 融合结果
+            merge_start = time.perf_counter()
             fused_regions = self._fuse_results(
                 mineru_result,
                 multimodal_result
             )
-            merge_time = int((datetime.now() - merge_start).total_seconds() * 1000)
+            merge_time = (time.perf_counter() - merge_start) * 1000
 
-            # 步骤3: 构建元数据
-            total_time = int((datetime.now() - start_time).total_seconds() * 1000)
+            logger.info(
+                "[OCR流程] 融合识别结果完成",
+                extra={
+                    "task_id": task_id,
+                    "merge_time_ms": round(merge_time, 2),
+                    "fused_count": len(fused_regions)
+                }
+            )
+
+            # 步骤4: 构建元数据
+            total_time = (time.perf_counter() - overall_start) * 1000
 
             # 从MinerU结果中获取图片尺寸
             mineru_metadata = mineru_result.get("metadata", {})
@@ -120,25 +156,24 @@ class MinerUMultimodalFusionService:
 
             metadata = HybridOCRMetadata(
                 traditional_ocr_engine="mineru",
-                multimodal_model=multimodal_result.get("model", "gpt-4o") if multimodal_result else "none",
-                parse_time_ms=total_time,
-                traditional_time_ms=mineru_result.get("parse_time_ms", 0),
-                multimodal_time_ms=multimodal_result.get("parse_time_ms", 0) if multimodal_result else 0,
-                merge_time_ms=merge_time,
+                multimodal_model=multimodal_result.get("model", "none") if multimodal_result else "none",
+                parse_time_ms=int(total_time),
+                traditional_time_ms=int(mineru_time),
+                multimodal_time_ms=int(multimodal_time) if multimodal_time else 0,
+                merge_time_ms=int(merge_time),
                 text_count=len(fused_regions),
                 traditional_count=len(mineru_result.get("text_regions", [])),
                 multimodal_count=len(multimodal_result.get("regions", [])) if multimodal_result else 0,
                 merged_count=len(fused_regions),
-                created_at=start_time,
+                created_at=datetime.now(),
                 completed_at=datetime.now(),
-                # 新增：图片尺寸信息（用于前端坐标转换）
                 image_width=image_width,
                 image_height=image_height
             )
 
             # 从MinerU结果中获取装饰元素
             image_regions_data = mineru_result.get("image_regions", [])
-            
+
             # 转换为ImageRegion对象列表
             from app.schemas.image_editing import ImageRegion, BoundingBox
             image_regions = []
@@ -162,21 +197,36 @@ class MinerUMultimodalFusionService:
             )
 
             logger.info(
-                "MinerU+多模态混合识别完成",
+                "[OCR流程] 混合OCR识别完成",
                 extra={
                     "task_id": task_id,
+                    "total_time_ms": round(total_time, 2),
                     "text_count": len(fused_regions),
                     "image_count": len(mineru_result.get("image_regions", [])),
-                    "total_time_ms": total_time
+                    "timing_breakdown": {
+                        "mineru_ms": round(mineru_time, 2),
+                        "multimodal_ms": round(multimodal_time, 2) if enable_style_recognition else 0,
+                        "merge_ms": round(merge_time, 2)
+                    }
                 }
             )
 
             return result
 
         except Exception as e:
+            total_time = (time.perf_counter() - overall_start) * 1000
             logger.error(
-                "MinerU+多模态混合识别失败",
-                extra={"task_id": task_id, "error": str(e)}
+                "[OCR流程] 混合OCR识别失败",
+                extra={
+                    "task_id": task_id,
+                    "error": str(e),
+                    "total_time_ms": round(total_time, 2),
+                    "timing_breakdown": {
+                        "mineru_ms": round(mineru_time, 2),
+                        "multimodal_ms": round(multimodal_time, 2),
+                        "merge_ms": round(merge_time, 2)
+                    }
+                }
             )
             raise
 

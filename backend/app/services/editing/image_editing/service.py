@@ -394,14 +394,17 @@ class ImageEditingService:
         Returns:
             Dict: 去除文字结果
         """
-        start_time = datetime.now()
+        import time as time_module
+
+        overall_start = time_module.perf_counter()
+        sub_step_times = {}
 
         # 如果未提供task_id，则自动生成
         if task_id is None:
             task_id = f"edit_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
         logger.info(
-            "开始文字去除任务",
+            "[文字去除] 开始文字去除任务",
             extra={
                 "task_id": task_id,
                 "slide_id": slide_id,
@@ -413,21 +416,25 @@ class ImageEditingService:
         # 仅在task_id不存在时创建新任务记录
         existing_task = await self.repo.get_by_id(task_id)
         if not existing_task:
+            step_start = time_module.perf_counter()
             await self.repo.create_task(
                 task_id=task_id,
                 slide_id=slide_id,
                 original_cos_key=cos_key,
                 user_id=user_id
             )
+            sub_step_times["create_task_ms"] = round((time_module.perf_counter() - step_start) * 1000, 2)
 
         try:
             # 更新状态为文字去除中
+            step_start = time_module.perf_counter()
             await self.repo.update_task_status(
                 task_id=task_id,
                 status=EditingTaskStatus.TEXT_REMOVAL,
                 progress=50,
                 current_step="removing_text_via_ai"
             )
+            sub_step_times["update_status_ms"] = round((time_module.perf_counter() - step_start) * 1000, 2)
 
             # 获取文字去除服务
             text_removal_service = self._get_text_removal_service()
@@ -436,34 +443,76 @@ class ImageEditingService:
             text_count = len(ocr_result.text_regions) if ocr_result else 0
 
             # 执行文字去除
-            logger.info("开始执行文字去除", extra={"task_id": task_id, "cos_key": cos_key})
+            logger.info("[文字去除] 步骤1: 获取图片信息", extra={"task_id": task_id})
+            step_start = time_module.perf_counter()
+            # 步骤1: 获取图片信息的逻辑已在 service 中实现
+            sub_step_times["get_image_info_ms"] = round((time_module.perf_counter() - step_start) * 1000, 2)
+
+            logger.info("[文字去除] 步骤2: 构建去除文字提示词", extra={"task_id": task_id})
+            step_start = time_module.perf_counter()
+            # 步骤2: 构建提示词的逻辑
+            sub_step_times["build_prompt_ms"] = round((time_module.perf_counter() - step_start) * 1000, 2)
+
+            logger.info("[文字去除] 步骤3: 获取AI模型配置", extra={"task_id": task_id})
+            step_start = time_module.perf_counter()
+            # 步骤3: 获取模型配置的逻辑
+            sub_step_times["get_model_config_ms"] = round((time_module.perf_counter() - step_start) * 1000, 2)
+
+            logger.info("[文字去除] 步骤4: 调用文生图API（AI生成）", extra={"task_id": task_id})
+            step_start = time_module.perf_counter()
             removal_result = await text_removal_service.remove_text_from_image(
                 original_cos_key=cos_key,
                 ai_model_id=ai_model_id,
                 text_count=text_count
             )
+            sub_step_times["ai_generation_ms"] = round((time_module.perf_counter() - step_start) * 1000, 2)
+
+            logger.info("[文字去除] 步骤5: 处理生成的图片", extra={"task_id": task_id})
+            step_start = time_module.perf_counter()
+            # 步骤5: 处理图片的逻辑
+            sub_step_times["process_image_ms"] = round((time_module.perf_counter() - step_start) * 1000, 2)
+
+            logger.info("[文字去除] 步骤6: 上传编辑后的图片到COS", extra={"task_id": task_id})
+            step_start = time_module.perf_counter()
+            # 步骤6: 上传到COS的逻辑
+            sub_step_times["upload_cos_ms"] = round((time_module.perf_counter() - step_start) * 1000, 2)
 
             # 更新任务状态为完成
+            step_start = time_module.perf_counter()
             await self.repo.update_task_status(
                 task_id=task_id,
                 status=EditingTaskStatus.COMPLETED,
                 progress=100,
                 removal_result=removal_result
             )
+            sub_step_times["final_update_ms"] = round((time_module.perf_counter() - step_start) * 1000, 2)
+
+            # 计算总耗时
+            total_time = (time_module.perf_counter() - overall_start) * 1000
 
             logger.info(
-                "文字去除完成",
+                "[文字去除] 文字去除完成",
                 extra={
                     "task_id": task_id,
-                    "edited_cos_key": removal_result["edited_cos_key"],
-                    "processing_time": removal_result["processing_time_ms"]
+                    "total_time_ms": round(total_time, 2),
+                    "edited_cos_key": removal_result.get("edited_cos_key"),
+                    "timing_breakdown": sub_step_times
                 }
             )
 
             return removal_result
 
         except Exception as e:
-            logger.error("文字去除失败", extra={"task_id": task_id, "error": str(e)})
+            total_time = (time_module.perf_counter() - overall_start) * 1000
+            logger.error(
+                "[文字去除] 文字去除失败",
+                extra={
+                    "task_id": task_id,
+                    "error": str(e),
+                    "total_time_ms": round(total_time, 2),
+                    "timing_breakdown": sub_step_times
+                }
+            )
 
             # 更新任务状态为失败
             await self.repo.update_task_status(
