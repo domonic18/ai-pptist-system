@@ -381,8 +381,9 @@ class MultimodalOCREngine:
 
                 # 获取字体信息，提供默认值
                 font_info = item.get("font", {})
+                font_size_rate = 36/52  # 多模态模型通常字体偏大，缩小比例
                 font = {
-                    "size": int(font_info.get("size", 16)),
+                    "size": int(font_info.get("size", 16)*font_size_rate),
                     "family": font_info.get("family", "Microsoft YaHei"),
                     "weight": font_info.get("weight", "normal"),
                     "color": font_info.get("color", "#000000"),

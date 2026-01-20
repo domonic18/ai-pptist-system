@@ -35,3 +35,15 @@ coverage
 core.*.egg-info/
 ai_pptist_backend.egg-info/
 *.egg-info/
+local_docs/
+*.pyc
+backend/celerybeat-schedule.*
+workspace/celerybeat-schedule.*
+
+backend/saml/certs/sp.crt
+backend/saml/certs/sp.key
+backend/saml/settings.json
+tmpclaude-*
+backend/本地启动.txt
+python3-saml-master/
+backend/debug_cache/
